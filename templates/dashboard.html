@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% set active = "dashboard" %}
+{% block title %}Dashboard{% endblock %}
+
+{% block content %}
+<hgroup>
+    <h1>Dashboard</h1>
+    <p>Knowledge base overview</p>
+</hgroup>
+
+<div class="stats-grid">
+    <article class="stat-card">
+        <h2>{{ stats.total }}</h2>
+        <small>Total Items</small>
+    </article>
+    <article class="stat-card">
+        <h2>{{ stats.sources }}</h2>
+        <small>Sources</small>
+    </article>
+    <article class="stat-card">
+        <h2>{{ stats.thoughts }}</h2>
+        <small>Thoughts</small>
+    </article>
+    <article class="stat-card">
+        <h2>{{ stats.artifacts }}</h2>
+        <small>Artifacts</small>
+    </article>
+</div>
+
+<section>
+    <h2>Quick Actions</h2>
+    <div class="grid">
+        <form hx-post="/api/ingest/url" hx-target="#ingest-result" hx-indicator="#ingest-spinner">
+            <fieldset role="group">
+                <input type="url" name="url" placeholder="Paste a URL to ingest..." required>
+                <button type="submit">Ingest</button>
+            </fieldset>
+            <span id="ingest-spinner" class="htmx-indicator" aria-busy="true">Processing...</span>
+        </form>
+        <form hx-post="/api/ingest/thought" hx-target="#thought-result" hx-indicator="#thought-spinner">
+            <fieldset role="group">
+                <input type="text" name="content" placeholder="Quick thought..." required>
+                <button type="submit">Save</button>
+            </fieldset>
+            <span id="thought-spinner" class="htmx-indicator" aria-busy="true">Saving...</span>
+        </form>
+    </div>
+    <div id="ingest-result"></div>
+    <div id="thought-result"></div>
+</section>
+
+{% if recent_items %}
+<section>
+    <h2>Recent Ingestions</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Title</th>
+                <th>Pillar</th>
+                <th>Type</th>
+                <th>Added</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in recent_items %}
+            <tr>
+                <td><a href="/admin/knowledge?q={{ item.title[:30] | urlencode }}">{{ item.title[:60] }}</a></td>
+                <td>
+                    {% for p in item.pillar %}
+                    <span class="pillar-badge {{ p }}">{{ p }}</span>
+                    {% endfor %}
+                </td>
+                <td>{{ item.source_type }}</td>
+                <td>{{ item.created_at.strftime('%b %d, %H:%M') if item.created_at else '' }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</section>
+{% endif %}
+{% endblock %}

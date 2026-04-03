@@ -8,9 +8,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Python dependencies
+# Python dependencies (install from pyproject.toml)
 COPY pyproject.toml .
-RUN pip install --no-cache-dir -e .
+COPY app/__init__.py app/__init__.py
+RUN pip install --no-cache-dir .
 
 # Application code
 COPY . .

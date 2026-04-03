@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% set active = "ingest" %}
+{% block title %}Ingest{% endblock %}
+
+{% block content %}
+<hgroup>
+    <h1>Ingest Content</h1>
+    <p>Add sources, thoughts, and expertise artifacts to the knowledge base</p>
+</hgroup>
+
+<details open>
+    <summary role="button">Paste URL</summary>
+    <form hx-post="/api/ingest/url" hx-target="#url-result" hx-indicator="#url-spinner">
+        <label for="url">URL</label>
+        <input type="url" id="url" name="url" placeholder="https://example.com/article" required>
+        <label for="notes">Notes (optional)</label>
+        <textarea id="notes" name="notes" placeholder="Your notes about this content..."></textarea>
+        <button type="submit">
+            Ingest URL
+            <span id="url-spinner" class="htmx-indicator" aria-busy="true"></span>
+        </button>
+    </form>
+    <div id="url-result"></div>
+</details>
+
+<details>
+    <summary role="button" class="secondary">Quick Thought</summary>
+    <form hx-post="/api/ingest/thought" hx-target="#thought-result" hx-indicator="#thought-spinner">
+        <label for="thought-content">Thought</label>
+        <textarea id="thought-content" name="content" placeholder="An idea, reaction, or connection..." required></textarea>
+        <div class="grid">
+            <div>
+                <label for="thought-type">Type</label>
+                <select id="thought-type" name="thought_type">
+                    <option value="idea">Idea</option>
+                    <option value="reaction">Reaction</option>
+                    <option value="connection">Connection</option>
+                    <option value="framework">Framework</option>
+                </select>
+            </div>
+            <div>
+                <label>Pillar</label>
+                <fieldset>
+                    <label><input type="checkbox" name="pillar" value="context_layers"> Context Intelligence</label>
+                    <label><input type="checkbox" name="pillar" value="product_mgmt"> Product Management</label>
+                    <label><input type="checkbox" name="pillar" value="leadership"> Leadership</label>
+                </fieldset>
+            </div>
+        </div>
+        <button type="submit" class="secondary">
+            Save Thought
+            <span id="thought-spinner" class="htmx-indicator" aria-busy="true"></span>
+        </button>
+    </form>
+    <div id="thought-result"></div>
+</details>
+
+<details>
+    <summary role="button" class="contrast">Expertise Artifact</summary>
+    <form hx-post="/api/ingest/expertise" hx-target="#artifact-result" hx-indicator="#artifact-spinner">
+        <label for="artifact-title">Title</label>
+        <input type="text" id="artifact-title" name="title" placeholder="Framework or case study name" required>
+        <label for="artifact-content">Content</label>
+        <textarea id="artifact-content" name="content" placeholder="Full content (supports markdown)..." rows="10" required></textarea>
+        <div class="grid">
+            <div>
+                <label for="artifact-type">Type</label>
+                <select id="artifact-type" name="artifact_type">
+                    <option value="framework">Framework</option>
+                    <option value="case_study">Case Study</option>
+                    <option value="methodology">Methodology</option>
+                    <option value="analysis">Analysis</option>
+                </select>
+            </div>
+            <div>
+                <label for="artifact-domain">Domain</label>
+                <input type="text" id="artifact-domain" name="domain" placeholder="e.g., AI, Product">
+            </div>
+        </div>
+        <button type="submit" class="contrast">
+            Save Artifact
+            <span id="artifact-spinner" class="htmx-indicator" aria-busy="true"></span>
+        </button>
+    </form>
+    <div id="artifact-result"></div>
+</details>
+{% endblock %}

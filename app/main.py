@@ -1,11 +1,45 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-app = FastAPI(title="Sia — Context Layer Engine", version="0.1.0")
+from app.api.config import router as config_router
+from app.api.ingest import router as ingest_router
+from app.api.knowledge import router as knowledge_router
+from app.auth import router as auth_router
+from app.database import engine
+from app.ui import router as ui_router
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    yield
+    await engine.dispose()
+
+
+app = FastAPI(title="Sia — Context Layer Engine", version="0.1.0", lifespan=lifespan)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 templates = Jinja2Templates(directory="templates")
 app.mount("/static", StaticFiles(directory="static"), name="static")
+
+# API routes
+app.include_router(auth_router)
+app.include_router(ingest_router)
+app.include_router(knowledge_router)
+app.include_router(config_router)
+
+# Admin UI routes
+app.include_router(ui_router)
 
 
 @app.get("/api/health")

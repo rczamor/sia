@@ -1,0 +1,25 @@
+{% if results %}
+{% for r in results %}
+<article class="result-item">
+    <header>
+        {% if r.title %}
+        <strong>{{ r.title }}</strong>
+        {% else %}
+        <strong>{{ r.entity_type }}</strong>
+        {% endif %}
+        <span class="result-score">Score: {{ "%.2f"|format(r.score) }}</span>
+    </header>
+    {% if r.content_preview %}
+    <p>{{ r.content_preview[:200] }}</p>
+    {% endif %}
+    <footer>
+        <small>{{ r.entity_type }}</small>
+        {% for p in r.pillar %}
+        <span class="pillar-badge {{ p }}">{{ p }}</span>
+        {% endfor %}
+    </footer>
+</article>
+{% endfor %}
+{% else %}
+<p>No results found.</p>
+{% endif %}

@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}Sia{% endblock %} — Context Layer Engine</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+    <script src="https://unpkg.com/htmx.org@2.0.4"></script>
+    <style>
+        :root {
+            --pico-font-family: system-ui, -apple-system, sans-serif;
+        }
+        nav ul li a.active { font-weight: bold; text-decoration: underline; }
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 1rem; }
+        .stat-card { text-align: center; padding: 1rem; border-radius: var(--pico-border-radius); background: var(--pico-card-background-color); }
+        .stat-card h2 { margin: 0; font-size: 2rem; }
+        .stat-card small { opacity: 0.7; }
+        .pillar-badge { display: inline-block; padding: 0.15rem 0.5rem; border-radius: 1rem; font-size: 0.75rem; margin-right: 0.25rem; }
+        .pillar-badge.context_layers { background: #2563eb; color: white; }
+        .pillar-badge.product_mgmt { background: #7c3aed; color: white; }
+        .pillar-badge.leadership { background: #059669; color: white; }
+        .result-item { padding: 0.75rem 0; border-bottom: 1px solid var(--pico-muted-border-color); }
+        .result-item:last-child { border-bottom: none; }
+        .result-score { opacity: 0.5; font-size: 0.8rem; }
+        .htmx-indicator { display: none; }
+        .htmx-request .htmx-indicator { display: inline; }
+    </style>
+</head>
+<body>
+    <nav class="container-fluid">
+        <ul>
+            <li><strong>Sia</strong></li>
+        </ul>
+        <ul>
+            <li><a href="/admin/dashboard" {% if active == "dashboard" %}class="active"{% endif %}>Dashboard</a></li>
+            <li><a href="/admin/knowledge" {% if active == "knowledge" %}class="active"{% endif %}>Knowledge</a></li>
+            <li><a href="/admin/ingest" {% if active == "ingest" %}class="active"{% endif %}>Ingest</a></li>
+        </ul>
+    </nav>
+    <main class="container">
+        {% block content %}{% endblock %}
+    </main>
+    <footer class="container">
+        <small>Sia — Context Layer Engine v0.1.0</small>
+    </footer>
+</body>
+</html>
