@@ -172,6 +172,22 @@ class EntityService:
         entity.mention_count = (entity.mention_count or 0) + 1
         entity.confidence = min(1.0, max(entity.confidence or 0.0, confidence) + 0.05)
 
+    async def find_by_name_or_alias(self, name: str) -> uuid.UUID | None:
+        """Type-independent lookup of an existing entity by exact name or alias.
+        No create, no semantic match — used to resolve relation endpoints."""
+        name = (name or "").strip()
+        if not name:
+            return None
+        row = (
+            await self.db.execute(
+                select(Entities.id)
+                .where(or_(Entities.name == name, Entities.aliases.any(name)))
+                .order_by(Entities.id)
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+        return row
+
     async def count(self) -> int:
         return (await self.db.execute(select(func.count(Entities.id)))).scalar() or 0
 
@@ -269,13 +285,16 @@ class EntityExtractor:
         return new_entities
 
     async def _ref_for(self, name: str | None, name_to_id: dict[str, uuid.UUID]) -> str | None:
+        """Resolve a relation endpoint to an EXISTING entity (this batch's map, then
+        a type-independent exact-name/alias lookup). A relation that names an unknown
+        entity is skipped rather than spawning a mistyped phantom node."""
         name = (name or "").strip()
         if not name:
             return None
         if name in name_to_id:
             return f"entity:{name_to_id[name]}"
-        resolved = await self.entities.resolve_or_create(name=name)
-        if resolved is None:
-            return None
-        name_to_id[name] = resolved.id
-        return f"entity:{resolved.id}"
+        existing = await self.entities.find_by_name_or_alias(name)
+        if existing is not None:
+            name_to_id[name] = existing
+            return f"entity:{existing}"
+        return None

@@ -113,6 +113,46 @@ async def test_extractor_attaches_declared_aliases(db_session, store):
     assert await EntityService(db_session, embedder).count() == 1
 
 
+async def test_relation_to_unknown_entity_is_skipped_not_phantom(db_session, store):
+    """A relation naming an entity that is neither declared nor already in the graph
+    must NOT spawn a mistyped 'concept' phantom; the relation is skipped."""
+    from app.data.lineage import LineageService, TrackedLLMProvider
+
+    await store.commit(
+        {"knowledge/context_layers/m.md": "---\npillar: context_layers\n---\n\n# M\n\n## Gist\n\nM.\n"},
+        "seed",
+    )
+    embedder = HashingEmbedder()
+    await StoreIndexer(db_session, store, embedder).sync()
+
+    class Row:
+        path, gist, kind, status = "knowledge/context_layers/m.md", "M.", "topic", "active"
+
+    # entity list declares only "Reranking" (method); relation references "RRF",
+    # which is not declared and not an existing entity
+    llm = FakeLLM({
+        "entities": [{"name": "Reranking", "type": "method", "aliases": [],
+                      "mentioned_in": ["knowledge/context_layers/m.md"]}],
+        "relations": [{"subject": "RRF", "relation": "kind of", "object": "Reranking"}],
+    })
+    extractor = EntityExtractor(
+        db_session, store, TrackedLLMProvider(llm, LineageService(db_session)), embedder
+    )
+    import uuid as uuid_module
+
+    await extractor.extract_for_topics([Row()], uuid_module.uuid4())
+    await db_session.commit()
+
+    # only "Reranking" exists — no phantom "RRF"
+    assert await EntityService(db_session, embedder).count() == 1
+    rel = (
+        await db_session.execute(
+            text("SELECT count(*) FROM context_edges WHERE predicate='related_to'")
+        )
+    ).scalar()
+    assert rel == 0  # relation to the unknown entity was skipped
+
+
 async def test_distinct_concepts_stay_separate(db_session):
     svc = EntityService(db_session, HashingEmbedder())
     await svc.resolve_or_create("Reciprocal Rank Fusion", "concept")

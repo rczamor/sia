@@ -21,8 +21,18 @@ from app.runtime import get_runtime, shutdown_runtime
 from app.ui import router as ui_router
 
 
+INSECURE_JWT_SECRETS = {"", "change-me", "change-this-to-a-random-secret"}
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Refuse to boot with a default/blank JWT secret: anyone could forge an owner
+    # session token. Set JWT_SECRET (openssl rand -hex 32).
+    if settings.jwt_secret in INSECURE_JWT_SECRETS:
+        raise RuntimeError(
+            "JWT_SECRET is unset or default. Set a strong JWT_SECRET before starting "
+            "(openssl rand -hex 32) — a default secret lets anyone forge an owner token."
+        )
     runtime = await get_runtime()  # discover + initialize enabled plugins
     await scaffold_store(runtime.context_store)  # idempotent store layout
     async with job_queue.open_async():  # web process defers jobs; workers run them

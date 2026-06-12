@@ -51,8 +51,16 @@ class Ratchet:
         self.embedder = embedder
 
     async def _objective(self) -> float:
-        """Regression pass rate + mean coverage over the golden fixtures."""
-        builder = ContextBuilder(self.db, self.store, self.embedder)
+        """Regression pass rate + mean coverage over the golden fixtures. The builder
+        is given a SearchService so the retrieval tunables this ratchet mutates
+        (rrf_k, candidates_per_table, min_similarity) actually affect the score —
+        otherwise every candidate scores identically and nothing ever promotes."""
+        from app.retrieval.search import SearchService
+
+        builder = ContextBuilder(
+            self.db, self.store, self.embedder,
+            search_service=SearchService(self.db, self.embedder),
+        )
         results = await run_regression(self.db, self.store, builder)
         if not results:
             return 0.0

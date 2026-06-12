@@ -346,12 +346,14 @@ class ContextBuilder:
                     document.front.get("token_cost_estimate", row.token_estimate)
                 ),
             )
-            # progressive disclosure: full body only if it comfortably fits
+            # The stub (title + trigger) is always emitted by to_markdown(); the full
+            # body is added only if it comfortably fits. Count BOTH so tokens_used
+            # reflects the real served size in either branch.
+            stub_tokens = estimate_tokens(stub.title + " " + stub.trigger_description)
+            added += stub_tokens
             if used + added + stub.token_cost_estimate <= budget * 0.9:
                 stub.full_body = document.body
                 added += stub.token_cost_estimate
-            else:
-                added += estimate_tokens(stub.title + stub.trigger_description)
             artifact.skills.append(stub)
         return added
 
