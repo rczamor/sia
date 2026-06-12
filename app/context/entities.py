@@ -53,40 +53,69 @@ class EntityService:
         name: str,
         entity_type: str = "concept",
         confidence: float = 0.5,
+        aliases: list[str] | None = None,
     ) -> ResolvedEntity | None:
         """Return the canonical entity for ``name``, creating or alias-merging as
-        needed. Returns None for empty names."""
+        needed. ``aliases`` are surface forms (acronyms, expansions) the caller
+        already knows belong to this entity — they are attached to the resolved
+        entity AND indexed so future lookups of those forms resolve here. Returns
+        None for empty names."""
         name = (name or "").strip()
         if not name:
             return None
+        declared = [a.strip() for a in (aliases or []) if a and a.strip() and a.strip() != name]
 
+        entity = await self._find(name, entity_type)
+        if entity is None:
+            entity = Entities(
+                name=name,
+                entity_type=entity_type,
+                embedding=await self.embedder.embed(name),
+                aliases=[],
+                confidence=confidence,
+                mention_count=0,
+            )
+            self.db.add(entity)
+            created = True
+        else:
+            created = False
+            # the queried form resolved to a differently-named entity (alias or
+            # semantic match) — record it as an alias so it resolves directly next time
+            if name != entity.name:
+                declared = [name, *declared]
+
+        await self._add_aliases(entity, declared)
+        await self._reinforce(entity, confidence)
+        await self.db.flush()
+        return ResolvedEntity(entity.id, entity.name, created=created)
+
+    async def _find(self, name: str, entity_type: str) -> Entities | None:
+        """Locate an existing entity by exact name, then alias, then embedding
+        similarity (same type). Returns None if genuinely new."""
         # 1. exact name
         existing = (
             await self.db.execute(select(Entities).where(Entities.name == name))
         ).scalar_one_or_none()
         if existing is not None:
-            await self._reinforce(existing, confidence)
-            return ResolvedEntity(existing.id, existing.name, created=False)
+            return existing
 
-        # 2. alias match (name already an alias of some entity)
+        # 2. alias match (name already a recorded alias)
         alias_hit = (
-            await self.db.execute(
-                select(Entities).where(Entities.aliases.any(name)).limit(1)
-            )
+            await self.db.execute(select(Entities).where(Entities.aliases.any(name)).limit(1))
         ).scalar_one_or_none()
         if alias_hit is not None:
-            await self._reinforce(alias_hit, confidence)
-            return ResolvedEntity(alias_hit.id, alias_hit.name, created=False)
+            return alias_hit
 
+        # 3. semantic match: nearest same-type entity above threshold. A degenerate
+        # (zero) embedding yields a NaN distance; the >= test then fails closed.
         embedding = await self.embedder.embed(name)
-
-        # 3. semantic match: nearest same-type entity above threshold
+        if not any(embedding):
+            return None
         near = (
             await self.db.execute(
                 text(
                     """
-                    SELECT id, name, aliases,
-                           1 - (embedding <=> CAST(:vec AS vector)) AS sim
+                    SELECT id, 1 - (embedding <=> CAST(:vec AS vector)) AS sim
                     FROM entities
                     WHERE entity_type = :etype AND embedding IS NOT NULL
                     ORDER BY embedding <=> CAST(:vec AS vector)
@@ -96,24 +125,25 @@ class EntityService:
                 {"vec": str([float(v) for v in embedding]), "etype": entity_type},
             )
         ).mappings().first()
-        if near is not None and float(near["sim"]) >= ENTITY_MERGE_THRESHOLD:
-            merged = await self.db.get(Entities, near["id"])
-            if name not in (merged.aliases or []):
-                merged.aliases = [*(merged.aliases or []), name]
-            await self._reinforce(merged, confidence)
-            return ResolvedEntity(merged.id, merged.name, created=False)
+        if near is not None and near["sim"] is not None and float(near["sim"]) >= ENTITY_MERGE_THRESHOLD:
+            return await self.db.get(Entities, near["id"])
+        return None
 
-        # 4. genuinely new
-        entity = Entities(
-            name=name,
-            entity_type=entity_type,
-            embedding=embedding,
-            confidence=confidence,
-            mention_count=1,
-        )
-        self.db.add(entity)
-        await self.db.flush()
-        return ResolvedEntity(entity.id, entity.name, created=True)
+    async def _add_aliases(self, entity: Entities, aliases: list[str]) -> None:
+        """Attach surface forms to ``entity`` unless one already names a *different*
+        entity (avoid stealing another node's identity)."""
+        current = list(entity.aliases or [])
+        for alias in aliases:
+            if alias == entity.name or alias in current:
+                continue
+            clash = (
+                await self.db.execute(
+                    select(Entities.id).where(Entities.name == alias, Entities.id != entity.id)
+                )
+            ).scalar_one_or_none()
+            if clash is None:
+                current.append(alias)
+        entity.aliases = current
 
     @staticmethod
     async def _reinforce(entity: Entities, confidence: float) -> None:
@@ -150,13 +180,15 @@ class EntityExtractor:
         self.serializer = MarkdownSerializer()
 
     async def _topic_text(self, row: ContextSections) -> str:
-        """gist :: key claims for one topic (claims add the named entities the gist
-        omits)."""
+        """gist :: key claims for one topic, read FRESH from the store file (not the
+        possibly-stale ORM row, which may predate this run's re-gist)."""
         content = await self.store.read(row.path)
-        claims = ""
-        if content:
-            claims = " ".join(self.serializer.loads(row.path, content).section("Key claims").split())
-        return f"{row.gist or ''} :: {claims[:1500]}"
+        if not content:
+            return f"{row.gist or ''} :: "
+        document = self.serializer.loads(row.path, content)
+        gist = document.section("Gist") or (row.gist or "")
+        claims = " ".join(document.section("Key claims").split())
+        return f"{gist} :: {claims[:1500]}"
 
     async def extract_for_topics(self, rows: list[ContextSections], run_id) -> int:
         """Extract entities/relations for the given topics. Returns new-entity count."""
@@ -179,19 +211,23 @@ class EntityExtractor:
 
     async def _apply(self, response: dict, known_paths: set[str], run_id) -> int:
         new_entities = 0
+        # map every surface form (name + declared aliases) to the resolved id so
+        # relations reference the canonical entity, not a wrongly-typed duplicate
         name_to_id: dict[str, uuid.UUID] = {}
         for item in response.get("entities") or []:
+            aliases = item.get("aliases") or []
             resolved = await self.entities.resolve_or_create(
                 name=item.get("name", ""),
                 entity_type=item.get("type", "concept"),
+                aliases=aliases,  # attached to this entity, not re-resolved separately
             )
             if resolved is None:
                 continue
-            name_to_id[item.get("name", "").strip()] = resolved.id
             new_entities += int(resolved.created)
-            # record surface forms the LLM reported as aliases
-            for alias in item.get("aliases") or []:
-                await self.entities.resolve_or_create(name=alias, entity_type=item.get("type", "concept"))
+            for form in [item.get("name", ""), *aliases]:
+                form = (form or "").strip()
+                if form:
+                    name_to_id[form] = resolved.id
             for path in item.get("mentioned_in") or []:
                 if path in known_paths:
                     await self.graph.upsert_edge(

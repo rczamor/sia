@@ -43,6 +43,60 @@ async def test_semantic_merge_records_alias(db_session):
     assert "reciprocal rank fusion" in aliases
 
 
+async def test_declared_alias_attaches_not_fragments(db_session):
+    """An LLM-declared alias whose embedding is dissimilar to the canonical name
+    (acronym vs expansion, cosine 0.0) must still attach as an alias — and a later
+    lookup of that surface form must resolve to the SAME entity, not a new node."""
+    svc = EntityService(db_session, HashingEmbedder())
+    rrf = await svc.resolve_or_create(
+        "RRF", "method", aliases=["reciprocal rank fusion"]
+    )
+    await db_session.commit()
+    assert await svc.count() == 1
+    aliases = (
+        await db_session.execute(
+            text("SELECT aliases FROM entities WHERE id = :id"), {"id": str(rrf.id)}
+        )
+    ).scalar()
+    assert "reciprocal rank fusion" in aliases
+
+    # the expansion now resolves to the same entity via the alias index
+    again = await svc.resolve_or_create("reciprocal rank fusion", "concept")
+    await db_session.commit()
+    assert again.id == rrf.id
+    assert await svc.count() == 1
+
+
+async def test_extractor_attaches_declared_aliases(db_session, store):
+    from app.data.lineage import LineageService, TrackedLLMProvider
+
+    await store.commit(
+        {"knowledge/context_layers/rrf.md": "---\npillar: context_layers\n---\n\n# RRF\n\n## Gist\n\nRRF.\n"},
+        "seed",
+    )
+    embedder = HashingEmbedder()
+    await StoreIndexer(db_session, store, embedder).sync()
+
+    class Row:
+        path, gist, kind, status = "knowledge/context_layers/rrf.md", "RRF.", "topic", "active"
+
+    llm = FakeLLM({
+        "entities": [{"name": "RRF", "type": "method",
+                      "aliases": ["reciprocal rank fusion", "rank fusion"],
+                      "mentioned_in": ["knowledge/context_layers/rrf.md"]}],
+        "relations": [],
+    })
+    extractor = EntityExtractor(
+        db_session, store, TrackedLLMProvider(llm, LineageService(db_session)), embedder
+    )
+    import uuid as uuid_module
+
+    added = await extractor.extract_for_topics([Row()], uuid_module.uuid4())
+    await db_session.commit()
+    assert added == 1  # one entity, two aliases — not three nodes
+    assert await EntityService(db_session, embedder).count() == 1
+
+
 async def test_distinct_concepts_stay_separate(db_session):
     svc = EntityService(db_session, HashingEmbedder())
     await svc.resolve_or_create("Reciprocal Rank Fusion", "concept")
