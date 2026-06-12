@@ -11,6 +11,7 @@ import sqlalchemy as sa
 from alembic import op
 from pgvector.sqlalchemy import Vector
 from sqlalchemy.dialects import postgresql
+from sqlalchemy.exc import ProgrammingError
 
 revision: str = "001"
 down_revision: Union[str, None] = None
@@ -19,9 +20,25 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    # Extensions
-    op.execute("CREATE EXTENSION IF NOT EXISTS vector")
-    op.execute('CREATE EXTENSION IF NOT EXISTS "uuid-ossp"')
+    # Extensions. Managed Postgres (Neon, RDS, ...) and locked-down roles often
+    # can't run CREATE EXTENSION: skip it when the extension is already installed,
+    # and turn a permission failure into an actionable message instead of a raw
+    # InsufficientPrivilege mid-migration.
+    bind = op.get_bind()
+    for ext in ("vector", "uuid-ossp"):
+        installed = bind.execute(
+            sa.text("SELECT 1 FROM pg_extension WHERE extname = :name"), {"name": ext}
+        ).scalar()
+        if installed:
+            continue
+        try:
+            op.execute(f'CREATE EXTENSION IF NOT EXISTS "{ext}"')
+        except ProgrammingError as exc:
+            raise RuntimeError(
+                f"This database role cannot create the '{ext}' extension. Enable it "
+                f"once as a superuser (CREATE EXTENSION \"{ext}\";) or via your "
+                "managed-Postgres console, then re-run `alembic upgrade head`."
+            ) from exc
 
     # --- source_content ---
     op.create_table(

@@ -1,4 +1,9 @@
-.PHONY: dev build up down migrate test test-db lint typecheck check
+.PHONY: dev build up down migrate test test-db lint typecheck check lock
+
+# Regenerate the dependency lockfile after editing pyproject.toml (needs uv:
+# https://docs.astral.sh/uv/). Docker and CI install with `-c constraints.txt`.
+lock:
+	uv pip compile pyproject.toml --extra dev -o constraints.txt
 
 dev:
 	docker compose up --build

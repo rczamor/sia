@@ -1,0 +1,16 @@
+# Keeps the pinned surfaces fresh: the constraints.txt lockfile, the SHA-pinned
+# GitHub Actions, and the base image. Pins without updates would just rot.
+version: 2
+updates:
+  - package-ecosystem: pip
+    directory: /
+    schedule:
+      interval: weekly
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly

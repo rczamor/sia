@@ -65,3 +65,34 @@ async def test_graph_endpoint_respects_limit(client, db_session, store):
     response = await client.get("/api/context/graph?limit=5")
     assert response.status_code == 200
     assert len(response.json()["nodes"]) <= 5 + 5  # capped sections + capped entities
+
+
+def test_admin_assets_are_vendored():
+    """Supply-chain: the admin UI must not load scripts or stylesheets from
+    third-party origins — all assets ship in app/static/vendor at pinned versions."""
+    import re
+
+    from app.templating import STATIC_DIR, TEMPLATES_DIR
+
+    external = []
+    for path in TEMPLATES_DIR.rglob("*.html"):
+        for tag in re.findall(r"<(?:script|link)\b[^>]*>", path.read_text()):
+            if re.search(r'(?:src|href)="https?://', tag):
+                external.append(f"{path.name}: {tag}")
+    assert not external, f"templates load external assets: {external}"
+
+    for asset in ("pico.min.css", "htmx.min.js", "cytoscape.min.js"):
+        vendored = STATIC_DIR / "vendor" / asset
+        assert vendored.is_file() and vendored.stat().st_size > 10_000, asset
+
+
+async def test_csp_allows_no_third_party_origins(anon_client):
+    csp = (await anon_client.get("/api/health")).headers["content-security-policy"]
+    assert "script-src 'self';" in csp
+    assert "http" not in csp  # no external origin anywhere in the policy
+
+
+async def test_vendored_assets_are_served(client):
+    for asset in ("vendor/pico.min.css", "vendor/htmx.min.js", "vendor/cytoscape.min.js"):
+        response = await client.get(f"/static/{asset}")
+        assert response.status_code == 200, asset

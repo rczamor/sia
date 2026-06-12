@@ -167,3 +167,28 @@ async def test_key_hashes_only_in_database(client, db_session):
     service = PrincipalService(db_session)
     principal = await service.authenticate(api_key)
     assert principal and principal.id == "agent-hashcheck"
+
+
+async def test_force_https_sets_secure_cookie_and_hsts(anon_client, monkeypatch):
+    """Behind a TLS proxy uvicorn may see plain http; FORCE_HTTPS must still mark
+    the session cookie Secure and emit HSTS."""
+    from app.config import settings
+
+    monkeypatch.setattr(settings, "force_https", True)
+    response = await anon_client.post(
+        "/login", data={"email": "admin@test.local", "password": "test-password"}
+    )
+    assert response.status_code == 303
+    assert "Secure" in response.headers["set-cookie"]
+    assert "strict-transport-security" in response.headers
+
+
+async def test_plain_http_dev_omits_secure_and_hsts(anon_client):
+    """Local-dev over http must stay usable: no Secure flag (the browser would drop
+    the cookie) and no HSTS."""
+    response = await anon_client.post(
+        "/login", data={"email": "admin@test.local", "password": "test-password"}
+    )
+    assert response.status_code == 303
+    assert "Secure" not in response.headers["set-cookie"]
+    assert "strict-transport-security" not in response.headers
