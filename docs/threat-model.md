@@ -43,8 +43,11 @@ rebinding between resolve and connect is not pinned; mitigate at the network lay
 - API keys: random 256-bit, sha256-at-rest, shown once, rotatable, revocable.
 - Deny-by-default middleware; owner-only surface for admin/config/review/principals;
   visitor principal is public-only with no raw-data fallback.
-- Session cookie: HttpOnly, SameSite=Lax, Secure on HTTPS; cross-origin unsafe
-  methods with a session cookie are refused (CSRF defense-in-depth).
+- Session cookie: HttpOnly, SameSite=Lax; Secure (and HSTS) when the request is
+  https or `FORCE_HTTPS=true` — set the latter behind a TLS-terminating proxy,
+  since uvicorn only sees https itself when `--proxy-headers` is trusted via
+  `FORWARDED_ALLOW_IPS`. Cross-origin unsafe methods with a session cookie are
+  refused (CSRF defense-in-depth).
 - Rate limits on login and anonymous builds (in-memory, per-process — use a
   shared store before scaling out).
 
@@ -69,14 +72,16 @@ content and are exposed only through the owner-only graph endpoint.
 
 ## 5. Supply chain
 
-Pinned dependency floors, pip-audit + gitleaks in CI, non-root container user.
-
-The admin UI loads three frontend assets (pico.css, htmx, cytoscape) from
-jsDelivr/unpkg. A `Content-Security-Policy` restricts script/style origins to
-`'self'` + those CDNs, blocks inline-script injection and `eval`, and locks
-`object-src`/`base-uri`/`frame-ancestors`. Admin is operator-only, which bounds the
-exposure. For a stricter posture, vendor the three files under `app/static/` and
-set `CSP_HEADER="default-src 'self'"` to drop the CDNs entirely.
+- Dependencies are pinned by `constraints.txt` (regenerate with `make lock`); the
+  Docker image and CI install against it, so builds are reproducible. GitHub
+  Actions are pinned to commit SHAs. Dependabot refreshes both weekly; pip-audit +
+  gitleaks run in CI; the container runs as a non-root user.
+- The admin UI executes **no third-party-hosted code**: the three frontend assets
+  (pico.css, htmx, cytoscape) are vendored at pinned versions under
+  `app/static/vendor/`, and the default `Content-Security-Policy` is
+  `default-src 'self'` — inline-script injection, `eval`, off-origin scripts,
+  framing, and base-uri tricks are all blocked. `CSP_HEADER` overrides the policy
+  if you need to loosen or tighten it.
 
 ## Out of scope (deliberately)
 

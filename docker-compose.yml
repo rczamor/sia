@@ -7,7 +7,9 @@ services:
     volumes:
       - .:/app
       - context-store:/srv/sia/context
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    # --proxy-headers trusts X-Forwarded-Proto/For from FORWARDED_ALLOW_IPS
+    # (set it in .env to your TLS proxy's IP; see docs/deployment.md)
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload --proxy-headers
     restart: unless-stopped
     extra_hosts:
       - "host.docker.internal:host-gateway"

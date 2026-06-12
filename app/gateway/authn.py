@@ -81,15 +81,15 @@ visitor_limiter = SlidingWindowLimiter(max_requests=30, window_seconds=60)
 login_limiter = SlidingWindowLimiter(max_requests=10, window_seconds=60)
 
 
-# Default CSP for the admin UI. The bundled templates load Pico/HTMX/Cytoscape from
-# jsDelivr/unpkg; this restricts script/style origins to self + those CDNs, blocks
-# inline-script injection and eval, and locks framing/base-uri. Operators who vendor
-# the three assets locally should set CSP_HEADER to "default-src 'self'". Override
-# wholesale via the CSP_HEADER env var.
+# Default CSP for the admin UI. All frontend assets (Pico/HTMX/Cytoscape) are
+# vendored under app/static/vendor/, so no third-party origin executes in the admin:
+# scripts come only from self, inline-script injection and eval are blocked, and
+# framing/base-uri are locked. style-src keeps 'unsafe-inline' for the templates'
+# <style> blocks. Override wholesale via the CSP_HEADER env var.
 DEFAULT_CSP = (
     "default-src 'self'; "
-    "script-src 'self' https://unpkg.com https://cdn.jsdelivr.net; "
-    "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+    "script-src 'self'; "
+    "style-src 'self' 'unsafe-inline'; "
     "img-src 'self' data:; "
     "connect-src 'self'; "
     "object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
@@ -107,7 +107,10 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers.setdefault(
             "Content-Security-Policy", settings.csp_header or DEFAULT_CSP
         )
-        if request.url.scheme == "https":
+        # Behind a TLS-terminating proxy, request.url.scheme is "https" only when
+        # uvicorn's proxy headers are trusted (--proxy-headers + FORWARDED_ALLOW_IPS).
+        # FORCE_HTTPS asserts the deployment is HTTPS-only regardless of that wiring.
+        if settings.force_https or request.url.scheme == "https":
             response.headers.setdefault(
                 "Strict-Transport-Security", "max-age=63072000; includeSubDomains"
             )

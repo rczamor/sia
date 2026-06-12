@@ -79,7 +79,9 @@ async def login_form(request: Request, email: str = Form(...), password: str = F
         create_token(email),
         httponly=True,
         samesite="lax",
-        secure=request.url.scheme == "https",
+        # FORCE_HTTPS covers TLS-terminating proxies that don't reach uvicorn as
+        # https (see Settings.force_https); otherwise trust the request scheme.
+        secure=settings.force_https or request.url.scheme == "https",
         max_age=settings.jwt_expiry_hours * 3600,
     )
     return response

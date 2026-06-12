@@ -33,16 +33,34 @@ def migrated_database():
     dsn = os.environ["DATABASE_URL"].replace("postgresql+asyncpg://", "postgresql://")
     try:
         with psycopg.connect(dsn) as conn:
-            has_vector = conn.execute(
-                "SELECT 1 FROM pg_available_extensions WHERE name = 'vector'"
+            installed = conn.execute(
+                "SELECT 1 FROM pg_extension WHERE extname = 'vector'"
             ).fetchone()
-            if not has_vector:
-                pytest.exit(
-                    "pgvector is not available in this Postgres. Install the extension "
-                    "(e.g. `apt-get install postgresql-16-pgvector`) or use the "
-                    "pgvector/pgvector image, then create the test DB: `make test-db`.",
-                    returncode=1,
-                )
+            if not installed:
+                available = conn.execute(
+                    "SELECT 1 FROM pg_available_extensions WHERE name = 'vector'"
+                ).fetchone()
+                if not available:
+                    pytest.exit(
+                        "pgvector is not available in this Postgres. Install the "
+                        "extension (e.g. `apt-get install postgresql-16-pgvector`) or "
+                        "use the pgvector/pgvector image, then create the test DB: "
+                        "`make test-db`.",
+                        returncode=1,
+                    )
+                # Available but not installed in this DB: install it here so the
+                # migration doesn't need the privilege — and if this role can't,
+                # fail with the fix instead of 100+ identical setup errors.
+                try:
+                    conn.execute("CREATE EXTENSION IF NOT EXISTS vector")
+                    conn.commit()
+                except psycopg.errors.InsufficientPrivilege:
+                    pytest.exit(
+                        "pgvector is available but this role may not CREATE EXTENSION. "
+                        "Enable it once as a superuser — `make test-db`, or "
+                        "`psql -d sia_test -c 'CREATE EXTENSION vector;'` — then re-run.",
+                        returncode=1,
+                    )
     except psycopg.OperationalError as exc:
         pytest.exit(
             f"Cannot connect to the test database ({exc}). Create it with "

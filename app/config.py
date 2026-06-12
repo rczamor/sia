@@ -32,9 +32,16 @@ class Settings(BaseSettings):
     # MCP/REST consumers are server-side and need no CORS)
     cors_origins: str = ""
 
-    # Content-Security-Policy for the admin UI. Empty = the built-in default (allows
-    # the bundled CDN assets). Set to "default-src 'self'" after vendoring assets.
+    # Content-Security-Policy for the admin UI. Empty = the built-in default
+    # (self-only; all frontend assets are vendored under app/static/vendor/).
     csp_header: str = ""
+
+    # Set true when the deployment is served over HTTPS (i.e. behind a TLS proxy):
+    # forces the Secure flag on the session cookie and always sends HSTS, even when
+    # proxy headers are not wired through to uvicorn. Without it, Secure/HSTS are
+    # emitted only when the request scheme is already https (direct TLS, or
+    # --proxy-headers with a trusted proxy IP).
+    force_https: bool = False
 
     # Context store (git-backed Markdown files)
     context_store_path: str = "/srv/sia/context"

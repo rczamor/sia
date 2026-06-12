@@ -24,6 +24,19 @@ sia.example.com {
 }
 ```
 
+Then tell Sia it's behind TLS — in `.env`:
+
+```bash
+FORCE_HTTPS=true              # Secure session cookie + HSTS, unconditionally
+FORWARDED_ALLOW_IPS=<proxy-ip>  # which peer uvicorn trusts for X-Forwarded-* headers
+```
+
+`FORCE_HTTPS` is the safety net: without it, a proxy that isn't in
+`FORWARDED_ALLOW_IPS` leaves uvicorn seeing plain http, and the session cookie
+would be set without `Secure` and HSTS would never be sent. With the Caddyfile
+above (proxy on the same host) `FORWARDED_ALLOW_IPS=172.17.0.1` (Docker bridge
+gateway) is typical; verify with `docker network inspect bridge`.
+
 Then connect your harnesses: see [connectors.md](connectors.md).
 
 ## Continuous deployment (GitHub Actions)
@@ -58,6 +71,8 @@ canonical; every Postgres context table is rebuildable from the store**.
 ## Operational checklist
 
 - [ ] `JWT_SECRET` is random and not the example value
+- [ ] `FORCE_HTTPS=true` set; login response carries a `Secure` cookie and a
+      `Strict-Transport-Security` header (check the browser dev tools)
 - [ ] Admin password hash set; login works; `/admin` unreachable anonymously
 - [ ] Per-consumer API keys created (never share the owner session)
 - [ ] Slack alert webhook configured (consolidation failures page you)
