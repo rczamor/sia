@@ -2,7 +2,9 @@ services:
   engine:
     build: .
     ports:
-      - "8000:8000"
+      # Loopback-only: the TLS proxy on this host is the sole way in from the
+      # network. Change to "8000:8000" only if you terminate TLS elsewhere.
+      - "127.0.0.1:8000:8000"
     env_file: .env
     volumes:
       - .:/app

@@ -33,9 +33,18 @@ FORWARDED_ALLOW_IPS=<proxy-ip>  # which peer uvicorn trusts for X-Forwarded-* he
 
 `FORCE_HTTPS` is the safety net: without it, a proxy that isn't in
 `FORWARDED_ALLOW_IPS` leaves uvicorn seeing plain http, and the session cookie
-would be set without `Secure` and HSTS would never be sent. With the Caddyfile
-above (proxy on the same host) `FORWARDED_ALLOW_IPS=172.17.0.1` (Docker bridge
-gateway) is typical; verify with `docker network inspect bridge`.
+would be set without `Secure` and HSTS would never be sent.
+
+**Scope the header trust carefully.** Whoever matches `FORWARDED_ALLOW_IPS` can
+set `X-Forwarded-For` (which keys the login/visitor rate limits) and
+`X-Forwarded-Proto`. With a same-host proxy reaching the loopback-published port,
+connections arrive from the Docker bridge gateway (often `172.17.0.1`) — an
+address **shared by every process on the host**, not unique to your proxy. That
+is acceptable on a single-purpose VPS (the compose file publishes the engine on
+`127.0.0.1` only, so nothing off-host reaches it directly), but on a shared host
+run the proxy as a container on the compose network and set
+`FORWARDED_ALLOW_IPS` to that container's IP instead. `FORCE_HTTPS` keeps
+cookie/HSTS decisions independent of the spoofable scheme either way.
 
 Then connect your harnesses: see [connectors.md](connectors.md).
 
