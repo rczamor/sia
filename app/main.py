@@ -3,21 +3,21 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
 
 from app.api.config import router as config_router
 from app.api.context import router as context_router
 from app.api.ingest import router as ingest_router
 from app.api.knowledge import router as knowledge_router
 from app.auth import router as auth_router
+from app.config import settings
 from app.context.store.layout import scaffold_store
 from app.database import engine
 from app.gateway.api import router as gateway_router
-from app.config import settings
 from app.gateway.authn import AuthMiddleware, SecurityHeadersMiddleware
 from app.gateway.mcp import build_mcp_asgi_app, mcp_server
 from app.jobs.queue import job_queue
 from app.runtime import get_runtime, shutdown_runtime
+from app.templating import STATIC_DIR
 from app.ui import router as ui_router
 
 
@@ -55,8 +55,7 @@ if settings.cors_origins:
         allow_headers=["Authorization", "Content-Type", "X-Sia-Key"],
     )
 
-templates = Jinja2Templates(directory="templates")
-app.mount("/static", StaticFiles(directory="static"), name="static")
+app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 # API routes
 app.include_router(auth_router)

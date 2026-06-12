@@ -48,7 +48,9 @@ def assert_safe_url(url: str) -> None:
 
 
 async def fetch_public_url(url: str) -> str:
-    """Fetch a public URL, re-validating the target on every redirect hop."""
+    """Fetch a public URL, re-validating the target on every redirect hop and
+    aborting as soon as the streamed body exceeds the size cap — so a malicious
+    endpoint can't force large memory use by sending a huge response."""
     current = url
     async with httpx.AsyncClient(
         follow_redirects=False,
@@ -57,17 +59,32 @@ async def fetch_public_url(url: str) -> str:
     ) as client:
         for _ in range(MAX_REDIRECTS + 1):
             assert_safe_url(current)
-            response = await client.get(current)
-            if response.status_code in REDIRECT_STATUSES:
-                location = response.headers.get("location")
-                if not location:
-                    raise UnsafeURLError("Redirect response without Location header")
-                current = str(httpx.URL(current).join(location))
-                continue
-            response.raise_for_status()
-            if len(response.content) > MAX_CONTENT_BYTES:
-                raise UnsafeURLError(
-                    f"Response exceeds {MAX_CONTENT_BYTES} bytes; refusing to ingest"
-                )
-            return response.text
+            async with client.stream("GET", current) as response:
+                if response.status_code in REDIRECT_STATUSES:
+                    location = response.headers.get("location")
+                    if not location:
+                        raise UnsafeURLError("Redirect response without Location header")
+                    current = str(httpx.URL(current).join(location))
+                    continue
+                response.raise_for_status()
+
+                # Reject early on an advertised oversize Content-Length.
+                declared = response.headers.get("content-length")
+                if declared and declared.isdigit() and int(declared) > MAX_CONTENT_BYTES:
+                    raise UnsafeURLError(
+                        f"Response exceeds {MAX_CONTENT_BYTES} bytes; refusing to ingest"
+                    )
+
+                chunks: list[bytes] = []
+                total = 0
+                async for chunk in response.aiter_bytes():
+                    total += len(chunk)
+                    if total > MAX_CONTENT_BYTES:
+                        raise UnsafeURLError(
+                            f"Response exceeds {MAX_CONTENT_BYTES} bytes; refusing to ingest"
+                        )
+                    chunks.append(chunk)
+                body = b"".join(chunks)
+                encoding = response.encoding or "utf-8"
+                return body.decode(encoding, errors="replace")
     raise UnsafeURLError(f"Too many redirects (>{MAX_REDIRECTS})")

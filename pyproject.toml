@@ -47,6 +47,11 @@ build-backend = "setuptools.build_meta"
 [tool.setuptools.packages.find]
 include = ["app*"]
 
+[tool.setuptools.package-data]
+# Ship the admin UI templates and static assets inside the wheel so the package
+# runs when pip-installed, not only from the repo root.
+app = ["templates/**/*", "static/**/*"]
+
 [tool.ruff]
 target-version = "py312"
 line-length = 100

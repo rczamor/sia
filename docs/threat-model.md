@@ -70,8 +70,13 @@ content and are exposed only through the owner-only graph endpoint.
 ## 5. Supply chain
 
 Pinned dependency floors, pip-audit + gitleaks in CI, non-root container user.
-Known accepted risks: CDN-served frontend assets (pico.css, htmx, cytoscape) on
-admin pages — admin is operator-only; vendor them if your threat model requires.
+
+The admin UI loads three frontend assets (pico.css, htmx, cytoscape) from
+jsDelivr/unpkg. A `Content-Security-Policy` restricts script/style origins to
+`'self'` + those CDNs, blocks inline-script injection and `eval`, and locks
+`object-src`/`base-uri`/`frame-ancestors`. Admin is operator-only, which bounds the
+exposure. For a stricter posture, vendor the three files under `app/static/` and
+set `CSP_HEADER="default-src 'self'"` to drop the CDNs entirely.
 
 ## Out of scope (deliberately)
 

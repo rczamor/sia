@@ -47,12 +47,20 @@ async def reject_review(branch: str, db: AsyncSession = Depends(get_db)):
 
 
 @router.get("/graph")
-async def graph_data(db: AsyncSession = Depends(get_db)):
-    """Nodes + edges for the graph view: store files, entities, and their links."""
+async def graph_data(
+    limit: int = 500,
+    pillar: str | None = None,
+    db: AsyncSession = Depends(get_db),
+):
+    """Nodes + edges for the graph view: store files, entities, and their links.
+    Capped to the ``limit`` highest-priority sections (and entities) so a large
+    corpus doesn't load the whole graph into one response; filterable by pillar."""
+    limit = max(1, min(limit, 2000))
+    pillar_clause = "AND s.pillar = :pillar" if pillar else ""
     sections = (
         await db.execute(
             text(
-                """
+                f"""
                 SELECT s.path, s.kind, s.title, s.pillar, s.status, s.priority,
                        coalesce(EXTRACT(EPOCH FROM (now() - s.freshness)) / 86400, 999)
                            AS age_days,
@@ -64,19 +72,21 @@ async def graph_data(db: AsyncSession = Depends(get_db)):
                     WHERE created_at > now() - interval '30 days'
                     GROUP BY item->>'path'
                 ) u ON u.path = s.path
-                WHERE s.kind IN ('topic', 'skill')
+                WHERE s.kind IN ('topic', 'skill') {pillar_clause}
+                ORDER BY s.priority DESC
+                LIMIT :limit
                 """
-            )
+            ),
+            {"limit": limit, **({"pillar": pillar} if pillar else {})},
         )
     ).mappings()
     entities = (
         await db.execute(
-            text("SELECT id, name, entity_type, confidence, mention_count, aliases FROM entities")
-        )
-    ).mappings()
-    edges = (
-        await db.execute(
-            text("SELECT subject_ref, predicate, object_ref, weight, label FROM context_edges")
+            text(
+                "SELECT id, name, entity_type, confidence, mention_count, aliases "
+                "FROM entities ORDER BY mention_count DESC, confidence DESC LIMIT :limit"
+            ),
+            {"limit": limit},
         )
     ).mappings()
 
@@ -110,9 +120,22 @@ async def graph_data(db: AsyncSession = Depends(get_db)):
             "uses_30d": 0,
         }
 
+    # Fetch only edges among the capped node set (not the whole edge table).
+    node_refs = list(nodes.keys())
+    edges = (
+        await db.execute(
+            text(
+                "SELECT subject_ref, predicate, object_ref, weight, label "
+                "FROM context_edges "
+                "WHERE subject_ref = ANY(:refs) AND object_ref = ANY(:refs)"
+            ),
+            {"refs": node_refs},
+        )
+    ).mappings()
+
     edge_list = []
     for e in edges:
-        # Only render edges between known nodes (data-layer refs stay off the canvas)
+        # Defensive: both endpoints are in the node set by the query above
         if e["subject_ref"] in nodes and e["object_ref"] in nodes:
             edge_list.append(
                 {

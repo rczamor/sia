@@ -32,6 +32,10 @@ class Settings(BaseSettings):
     # MCP/REST consumers are server-side and need no CORS)
     cors_origins: str = ""
 
+    # Content-Security-Policy for the admin UI. Empty = the built-in default (allows
+    # the bundled CDN assets). Set to "default-src 'self'" after vendoring assets.
+    csp_header: str = ""
+
     # Context store (git-backed Markdown files)
     context_store_path: str = "/srv/sia/context"
     context_store_remote: str = ""  # optional push mirror, e.g. git@github.com:user/sia-context
