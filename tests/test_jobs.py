@@ -45,7 +45,7 @@ async def test_jobs_survive_in_postgres(db_session):
     assert row.status == "todo"
 
 
-async def test_ingest_url_task_is_idempotent(db_session, monkeypatch):
+async def test_ingest_url_task_is_idempotent(db_session, monkeypatch, memory_queue):
     """Re-running the same URL job converges: the second run is a no-op dedup."""
     from sqlalchemy import text
 

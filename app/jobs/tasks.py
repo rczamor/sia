@@ -30,7 +30,52 @@ async def ingest_url_task(
     if "error" in result:
         # Dedup and refused URLs are terminal outcomes, not retryable failures.
         logger.info("ingest_url(%s) did not store: %s", url, result["error"])
+    elif result.get("id"):
+        # Post-ingest light consolidation for the new item
+        await light_clock_task.defer_async(source_ids=[result["id"]])
     return result
+
+
+@job_queue.task(name="light_clock", queue="consolidation", retry=TRANSIENT_RETRY)
+async def light_clock_task(source_ids: list[str] | None = None) -> dict:
+    import uuid as uuid_module
+
+    from app.database import async_session
+    from app.runtime import get_runtime
+
+    runtime = await get_runtime()
+    ids = [uuid_module.UUID(s) for s in source_ids] if source_ids else None
+    async with async_session() as db:
+        return await runtime.light_clock(db).run(ids)
+
+
+@job_queue.periodic(cron="15 * * * *")
+@job_queue.task(name="light_sweep", queue="consolidation")
+async def light_sweep(timestamp: int | None = None) -> dict:
+    """Hourly safety net: consolidate anything the post-ingest chain missed."""
+    return await light_clock_task()
+
+
+@job_queue.periodic(cron="0 6 * * *")
+@job_queue.task(name="rem_clock", queue="consolidation")
+async def rem_clock_task(timestamp: int | None = None) -> dict:
+    from app.database import async_session
+    from app.runtime import get_runtime
+
+    runtime = await get_runtime()
+    async with async_session() as db:
+        return await runtime.rem_clock(db).run()
+
+
+@job_queue.periodic(cron="0 7 * * 0")
+@job_queue.task(name="deep_clock", queue="consolidation")
+async def deep_clock_task(timestamp: int | None = None) -> dict:
+    from app.database import async_session
+    from app.runtime import get_runtime
+
+    runtime = await get_runtime()
+    async with async_session() as db:
+        return await runtime.deep_clock(db).run()
 
 
 @job_queue.periodic(cron="*/30 * * * *")

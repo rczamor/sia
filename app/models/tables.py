@@ -38,6 +38,8 @@ class SourceContent(Base):
     embedding = mapped_column(Vector(768), nullable=True)
     search_vector = mapped_column(TSVECTOR, nullable=True)
     is_consolidated: Mapped[bool] = mapped_column(Boolean, default=False)
+    trust_tier: Mapped[str] = mapped_column(String(20), default="untrusted")
+    quarantined: Mapped[bool] = mapped_column(Boolean, default=False)
     consumed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
@@ -54,6 +56,7 @@ class SourceContent(Base):
         Index("ix_source_content_pillar", "pillar", postgresql_using="gin"),
         Index("ix_source_content_source_type", "source_type"),
         Index("ix_source_content_consolidated", "is_consolidated"),
+        Index("ix_source_content_trust", "trust_tier", "quarantined"),
     )
 
 
@@ -200,6 +203,105 @@ class ProcessLineage(Base):
         Index("ix_process_lineage_output", "output_entity_type", "output_entity_id"),
         Index("ix_process_lineage_prompt", "prompt_name", "prompt_version"),
         Index("ix_process_lineage_quality", "quality_score"),
+    )
+
+
+class ContextSections(Base):
+    """Postgres index of the git-backed context store. Files are canonical; this
+    table is rebuilt from the store and exists for similarity search and joins."""
+
+    __tablename__ = "context_sections"
+
+    path: Mapped[str] = mapped_column(Text, primary_key=True)
+    kind: Mapped[str] = mapped_column(String(20), nullable=False)
+    title: Mapped[str | None] = mapped_column(Text)
+    pillar: Mapped[str | None] = mapped_column(String(50))
+    status: Mapped[str] = mapped_column(String(20), default="active")
+    priority: Mapped[float] = mapped_column(Float, default=0.5)
+    confidence: Mapped[float] = mapped_column(Float, default=0.5)
+    visibility: Mapped[str] = mapped_column(String(10), default="private")
+    freshness: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    gist: Mapped[str | None] = mapped_column(Text)
+    token_estimate: Mapped[int] = mapped_column(Integer, default=0)
+    embedding = mapped_column(Vector(768), nullable=True)
+    commit_sha: Mapped[str | None] = mapped_column(String(64))
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    __table_args__ = (
+        Index("ix_context_sections_kind", "kind"),
+        Index("ix_context_sections_pillar", "pillar"),
+        Index("ix_context_sections_embedding", "embedding", postgresql_using="hnsw",
+              postgresql_with={"m": 16, "ef_construction": 64},
+              postgresql_ops={"embedding": "vector_cosine_ops"}),
+    )
+
+
+class ConsolidationRuns(Base):
+    __tablename__ = "consolidation_runs"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    clock: Mapped[str] = mapped_column(String(20), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), default="running")
+    input_ids: Mapped[list[uuid.UUID]] = mapped_column(
+        ARRAY(UUID(as_uuid=True)), default=list
+    )
+    files_changed: Mapped[list[str]] = mapped_column(ARRAY(Text), default=list)
+    branch: Mapped[str | None] = mapped_column(Text)
+    summary: Mapped[str | None] = mapped_column(Text)
+    error: Mapped[str | None] = mapped_column(Text)
+    cost_usd: Mapped[float] = mapped_column(Float, default=0.0)
+    started_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    __table_args__ = (
+        Index("ix_consolidation_runs_clock", "clock", "started_at"),
+    )
+
+
+class Entities(Base):
+    __tablename__ = "entities"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    entity_type: Mapped[str] = mapped_column(String(50), default="concept")
+    aliases: Mapped[list[str]] = mapped_column(ARRAY(Text), default=list)
+    embedding = mapped_column(Vector(768), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+    __table_args__ = (
+        Index("ix_entities_name", "name", unique=True),
+    )
+
+
+class ContextEdges(Base):
+    """Knowledge-graph edges. Refs are namespaced strings: ``topic:<path>``,
+    ``skill:<path>``, ``entity:<uuid>``, ``source:<uuid>``, ``thought:<uuid>``,
+    ``artifact:<uuid>``. Predicates: mentions, supports, contradicts, supersedes,
+    related_to, derived_from, requires_skill."""
+
+    __tablename__ = "context_edges"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    subject_ref: Mapped[str] = mapped_column(Text, nullable=False)
+    predicate: Mapped[str] = mapped_column(String(30), nullable=False)
+    object_ref: Mapped[str] = mapped_column(Text, nullable=False)
+    weight: Mapped[float] = mapped_column(Float, default=1.0)
+    provenance: Mapped[str] = mapped_column(String(30), default="extracted")
+    created_by_run: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+    __table_args__ = (
+        Index("ix_context_edges_subject", "subject_ref", "predicate"),
+        Index("ix_context_edges_object", "object_ref", "predicate"),
+        Index("ix_context_edges_unique", "subject_ref", "predicate", "object_ref", unique=True),
     )
 
 

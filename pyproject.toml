@@ -70,6 +70,12 @@ forbidden_modules = ["app.retrieval", "app.runtime", "app.jobs", "app.api", "app
 name = "retrieval layer imports nothing above it"
 type = "forbidden"
 source_modules = ["app.retrieval"]
+forbidden_modules = ["app.context", "app.runtime", "app.jobs", "app.api", "app.ui", "app.main"]
+
+[[tool.importlinter.contracts]]
+name = "context layer imports nothing above it"
+type = "forbidden"
+source_modules = ["app.context"]
 forbidden_modules = ["app.runtime", "app.jobs", "app.api", "app.ui", "app.main"]
 
 [[tool.importlinter.contracts]]

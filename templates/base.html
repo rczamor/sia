@@ -24,6 +24,10 @@
         .result-item:last-child { border-bottom: none; }
         .result-score { opacity: 0.5; font-size: 0.8rem; }
         .htmx-indicator { display: none; }
+        pre.diff { max-height: 28rem; overflow: auto; font-size: 0.78rem; line-height: 1.35; }
+        .diff-add { color: #4ade80; }
+        .diff-del { color: #f87171; }
+        .diff-hunk { color: #38bdf8; }
         .htmx-request .htmx-indicator { display: inline; }
     </style>
 </head>
@@ -36,6 +40,8 @@
             <li><a href="/admin/dashboard" {% if active == "dashboard" %}class="active"{% endif %}>Dashboard</a></li>
             <li><a href="/admin/knowledge" {% if active == "knowledge" %}class="active"{% endif %}>Knowledge</a></li>
             <li><a href="/admin/ingest" {% if active == "ingest" %}class="active"{% endif %}>Ingest</a></li>
+            <li><a href="/admin/review" {% if active == "review" %}class="active"{% endif %}>Review</a></li>
+            <li><a href="/admin/graph" {% if active == "graph" %}class="active"{% endif %}>Graph</a></li>
         </ul>
     </nav>
     <main class="container">

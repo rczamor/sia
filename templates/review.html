@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% set active = "review" %}
+{% block title %}Review{% endblock %}
+
+{% block content %}
+<hgroup>
+    <h1>Consolidation Review</h1>
+    <p>Untrusted-derived changes reach the context store only through this gate</p>
+</hgroup>
+
+{% if not pending %}
+<p>Nothing waiting for review.</p>
+{% endif %}
+
+{% for item in pending %}
+<article>
+    <header>
+        <strong>{{ item.branch }}</strong>
+        <div role="group" style="float: right; max-width: 18rem">
+            <button class="approve"
+                    hx-post="/api/context/review/{{ item.branch }}/approve"
+                    hx-target="#review-result"
+                    hx-confirm="Merge {{ item.branch }} into the context store?">Approve</button>
+            <button class="secondary"
+                    hx-post="/api/context/review/{{ item.branch }}/reject"
+                    hx-target="#review-result"
+                    hx-confirm="Reject and delete {{ item.branch }}?">Reject</button>
+        </div>
+    </header>
+    <pre class="diff">{% for line in item.diff.split('\n') %}<span class="{% if line.startswith('+') and not line.startswith('+++') %}diff-add{% elif line.startswith('-') and not line.startswith('---') %}diff-del{% elif line.startswith('@@') %}diff-hunk{% endif %}">{{ line }}</span>
+{% endfor %}</pre>
+</article>
+{% endfor %}
+
+<div id="review-result"></div>
+{% endblock %}

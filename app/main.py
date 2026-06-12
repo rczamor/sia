@@ -6,10 +6,12 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from app.api.config import router as config_router
+from app.api.context import router as context_router
 from app.api.ingest import router as ingest_router
 from app.api.knowledge import router as knowledge_router
 from app.auth import router as auth_router
 from app.database import engine
+from app.context.store.layout import scaffold_store
 from app.jobs.queue import job_queue
 from app.runtime import get_runtime, shutdown_runtime
 from app.ui import router as ui_router
@@ -17,7 +19,8 @@ from app.ui import router as ui_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    await get_runtime()  # discover + initialize enabled plugins
+    runtime = await get_runtime()  # discover + initialize enabled plugins
+    await scaffold_store(runtime.context_store)  # idempotent store layout
     async with job_queue.open_async():  # web process defers jobs; workers run them
         yield
     await shutdown_runtime()
@@ -41,6 +44,7 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 app.include_router(auth_router)
 app.include_router(ingest_router)
 app.include_router(knowledge_router)
+app.include_router(context_router)
 app.include_router(config_router)
 
 # Admin UI routes

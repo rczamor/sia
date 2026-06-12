@@ -96,7 +96,9 @@ class IngestionService:
         tags = analysis.get("tags", [])
         source_type = analysis.get("source_type", "article")
 
-        # 4. Store in knowledge base (embedding happens inside add_source)
+        # 4. Store in knowledge base (embedding happens inside add_source).
+        # Trust tier: an annotated item passed through human hands (curated);
+        # a bare URL or feed item is untrusted until the review gate clears it.
         item = await self.store.add_source(
             title=title,
             url=url,
@@ -107,6 +109,7 @@ class IngestionService:
             author=author,
             your_notes=notes,
             tags=tags,
+            trust_tier="curated" if notes else "untrusted",
         )
 
         # 5. Create version record

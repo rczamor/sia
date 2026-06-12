@@ -28,6 +28,14 @@ class Settings(BaseSettings):
     feedly_access_token: str = ""
     feedly_board_id: str = ""
 
+    # Context store (git-backed Markdown files)
+    context_store_path: str = "/srv/sia/context"
+    context_store_remote: str = ""  # optional push mirror, e.g. git@github.com:user/sia-context
+
+    # Slack
+    slack_webhook_secret: str = ""  # verifies inbound ingestion webhooks
+    slack_alert_webhook_url: str = ""  # outbound alerts for consolidation failures
+
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 
 

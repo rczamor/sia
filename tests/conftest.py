@@ -7,6 +7,10 @@ os.environ.setdefault(
 )
 os.environ.setdefault("JWT_SECRET", "test-only-secret")
 
+import tempfile  # noqa: E402
+
+os.environ.setdefault("CONTEXT_STORE_PATH", tempfile.mkdtemp(prefix="sia-store-"))
+
 import httpx  # noqa: E402
 import pytest  # noqa: E402
 from alembic import command  # noqa: E402
@@ -33,7 +37,8 @@ async def clean_tables(migrated_database):
         await session.execute(
             text(
                 "TRUNCATE source_content, my_thoughts, expertise_artifacts, "
-                "consolidations, content_versions, process_lineage CASCADE"
+                "consolidations, content_versions, process_lineage, "
+                "context_sections, consolidation_runs, entities, context_edges CASCADE"
             )
         )
         await session.commit()
@@ -50,6 +55,20 @@ async def db_session():
 
     async with async_session() as session:
         yield session
+
+
+@pytest.fixture
+async def store(tmp_path, monkeypatch):
+    """Fresh scaffolded context store per test; runtime picks it up via settings."""
+    from app.config import settings
+    from app.context.store.gitstore import GitContextStore
+    from app.context.store.layout import scaffold_store
+
+    root = tmp_path / "context"
+    monkeypatch.setattr(settings, "context_store_path", str(root))
+    git_store = GitContextStore(str(root))
+    await scaffold_store(git_store)
+    return git_store
 
 
 @pytest.fixture

@@ -41,6 +41,7 @@ class KnowledgeStore:
         author: str | None = None,
         your_notes: str | None = None,
         tags: list[str] | None = None,
+        trust_tier: str = "untrusted",
     ) -> SourceContent:
         embed_text = f"{title} {summary or ''} {content or ''}"[:8000]
         embedding = await self.embedder.embed(embed_text)
@@ -55,6 +56,7 @@ class KnowledgeStore:
             author=author,
             your_notes=your_notes,
             tags=tags or [],
+            trust_tier=trust_tier,
             embedding=embedding,
         )
         self.db.add(item)

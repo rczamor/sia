@@ -81,3 +81,15 @@ async def knowledge_search_partial(
 @router.get("/admin/ingest", response_class=HTMLResponse)
 async def ingest_page(request: Request):
     return templates.TemplateResponse(request, "ingest.html", {})
+
+
+@router.get("/admin/review", response_class=HTMLResponse)
+async def review_page(request: Request, db: AsyncSession = Depends(get_db)):
+    runtime = await get_runtime()
+    pending = await runtime.review_service(db).pending()
+    return templates.TemplateResponse(request, "review.html", {"pending": pending})
+
+
+@router.get("/admin/graph", response_class=HTMLResponse)
+async def graph_page(request: Request):
+    return templates.TemplateResponse(request, "graph.html", {})

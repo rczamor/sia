@@ -13,6 +13,12 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.context.consolidation.deep import DeepClock
+from app.context.consolidation.light import LightClock
+from app.context.consolidation.rem import RemClock
+from app.context.index import StoreIndexer
+from app.context.review import ReviewService
+from app.context.store.gitstore import GitContextStore
 from app.data.ingestion import IngestionService
 from app.data.lineage import LineageService, TrackedLLMProvider
 from app.models.enums import PluginCategory
@@ -32,6 +38,7 @@ class Runtime:
     def __init__(self, plugins: PluginManager, llm_configs: dict[str, dict[str, Any]]):
         self.plugins = plugins
         self._llm_configs = llm_configs
+        self.context_store = GitContextStore()
 
     # --- provider resolution ---
 
@@ -81,6 +88,28 @@ class Runtime:
 
     def search_service(self, db: AsyncSession) -> SearchService:
         return SearchService(db, self.embedder)
+
+    def _consolidation_llm(self, db: AsyncSession) -> tuple[TrackedLLMProvider, dict[str, Any]]:
+        provider, params = self.llm_for("consolidation")
+        return TrackedLLMProvider(provider, LineageService(db), llmops=self.llmops), params
+
+    def light_clock(self, db: AsyncSession) -> LightClock:
+        llm, params = self._consolidation_llm(db)
+        return LightClock(db, self.context_store, llm, self.embedder, llm_params=params)
+
+    def rem_clock(self, db: AsyncSession) -> RemClock:
+        llm, params = self._consolidation_llm(db)
+        return RemClock(db, self.context_store, llm, self.embedder, llm_params=params)
+
+    def deep_clock(self, db: AsyncSession) -> DeepClock:
+        llm, params = self._consolidation_llm(db)
+        return DeepClock(db, self.context_store, llm, self.embedder, llm_params=params)
+
+    def indexer(self, db: AsyncSession) -> StoreIndexer:
+        return StoreIndexer(db, self.context_store, self.embedder)
+
+    def review_service(self, db: AsyncSession) -> ReviewService:
+        return ReviewService(db, self.context_store, self.embedder)
 
 
 _runtime: Runtime | None = None
