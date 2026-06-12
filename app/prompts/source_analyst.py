@@ -1,5 +1,5 @@
 CLASSIFY_AND_SUMMARIZE = """You are an expert content analyst for a knowledge system focused on three domains:
-1. Context Intelligence (context_layers) — AI architecture, three-phase memory, consolidation, agent memory, hybrid search
+1. Context Architecture (context_layers) — AI system architecture (Data, Retrieval, Context, Inference layers), context synthesis, memory consolidation, agent memory, hybrid search
 2. Product Management (product_mgmt) — JTBD, growth experimentation, AI product strategy, metric design
 3. Leadership (leadership) — executive communication, team building, decision-making, career narratives
 

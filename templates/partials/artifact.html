@@ -1,0 +1,56 @@
+<article>
+    <header>
+        <strong>Build {{ artifact.build_id }}</strong> — {{ artifact.principal_id }}
+        <br><small>
+            {{ artifact.tokens_used }}/{{ artifact.budget_tokens }} tokens ·
+            coverage {{ "%.2f"|format(artifact.coverage) }} ·
+            {{ artifact.sections|length }} sections ·
+            {{ artifact.skills|length }} skills ·
+            fallback: {{ "yes" if artifact.fallback else "no" }}
+        </small>
+    </header>
+
+    {% if artifact.cautions %}
+    <h4>Cautions</h4>
+    <ul>{% for c in artifact.cautions %}<li>{{ c }}</li>{% endfor %}</ul>
+    {% endif %}
+
+    <h4>Served sections</h4>
+    <table>
+        <thead><tr><th>path</th><th>kind</th><th>reason</th><th>tokens</th></tr></thead>
+        <tbody>
+        {% for s in artifact.sections %}
+            <tr>
+                <td>{{ s.path }}</td>
+                <td>{{ s.kind }}</td>
+                <td><span class="pillar-badge {{ 'context_layers' if s.reason == 'ranked' else 'product_mgmt' if s.reason == 'graph_expansion' else 'leadership' }}">{{ s.reason }}</span></td>
+                <td>{{ s.tokens }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+
+    {% if artifact.skills %}
+    <h4>Skills (progressive disclosure)</h4>
+    <ul>
+        {% for s in artifact.skills %}
+        <li><strong>{{ s.title }}</strong> — {{ s.trigger_description }}
+            <small>({{ "full body" if s.full_body else "stub only" }}, ~{{ s.token_cost_estimate }} tokens)</small></li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+
+    {% if artifact.fallback %}
+    <h4>Unconsolidated fallback</h4>
+    <ul>
+        {% for f in artifact.fallback %}
+        <li>[{{ f.entity_type }}] {{ f.title or f.id }}</li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+
+    <details>
+        <summary>Full artifact (Markdown, as a harness receives it)</summary>
+        <pre class="diff">{{ markdown }}</pre>
+    </details>
+</article>

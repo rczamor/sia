@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% set active = "inspector" %}
+{% block title %}Inspector{% endblock %}
+
+{% block content %}
+<hgroup>
+    <h1>Build Inspector</h1>
+    <p>Run a context build as any principal and see exactly what was served, and why</p>
+</hgroup>
+
+<form hx-post="/admin/inspector/run" hx-target="#artifact" hx-indicator="#build-spinner">
+    <div class="grid">
+        <div>
+            <label for="goal">Goal</label>
+            <input type="text" id="goal" name="goal" placeholder="What decision needs context?" required>
+        </div>
+        <div>
+            <label for="principal">Run as</label>
+            <select id="principal" name="principal_id">
+                {% for p in principals %}
+                <option value="{{ p.id }}">{{ p.id }} ({{ p.token_budget }} tokens)</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div>
+            <label for="budget">Budget override</label>
+            <input type="number" id="budget" name="budget_tokens" placeholder="(principal default)">
+        </div>
+    </div>
+    <button type="submit">Build <span id="build-spinner" class="htmx-indicator" aria-busy="true"></span></button>
+</form>
+
+<div id="artifact"></div>
+{% endblock %}

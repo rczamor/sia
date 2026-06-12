@@ -10,7 +10,7 @@
 
 <details open>
     <summary role="button">Paste URL</summary>
-    <form hx-post="/api/ingest/url" hx-target="#url-result" hx-indicator="#url-spinner">
+    <form hx-ext="json-form" hx-post="/api/ingest/url" hx-target="#url-result" hx-indicator="#url-spinner">
         <label for="url">URL</label>
         <input type="url" id="url" name="url" placeholder="https://example.com/article" required>
         <label for="notes">Notes (optional)</label>
@@ -25,7 +25,7 @@
 
 <details>
     <summary role="button" class="secondary">Quick Thought</summary>
-    <form hx-post="/api/ingest/thought" hx-target="#thought-result" hx-indicator="#thought-spinner">
+    <form hx-ext="json-form" data-json-arrays="pillar" hx-post="/api/ingest/thought" hx-target="#thought-result" hx-indicator="#thought-spinner">
         <label for="thought-content">Thought</label>
         <textarea id="thought-content" name="content" placeholder="An idea, reaction, or connection..." required></textarea>
         <div class="grid">
@@ -41,7 +41,7 @@
             <div>
                 <label>Pillar</label>
                 <fieldset>
-                    <label><input type="checkbox" name="pillar" value="context_layers"> Context Intelligence</label>
+                    <label><input type="checkbox" name="pillar" value="context_layers"> Context Architecture</label>
                     <label><input type="checkbox" name="pillar" value="product_mgmt"> Product Management</label>
                     <label><input type="checkbox" name="pillar" value="leadership"> Leadership</label>
                 </fieldset>
@@ -57,7 +57,7 @@
 
 <details>
     <summary role="button" class="contrast">Expertise Artifact</summary>
-    <form hx-post="/api/ingest/expertise" hx-target="#artifact-result" hx-indicator="#artifact-spinner">
+    <form hx-ext="json-form" data-json-arrays="pillar" hx-post="/api/ingest/expertise" hx-target="#artifact-result" hx-indicator="#artifact-spinner">
         <label for="artifact-title">Title</label>
         <input type="text" id="artifact-title" name="title" placeholder="Framework or case study name" required>
         <label for="artifact-content">Content</label>

@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% set active = "health" %}
+{% block title %}Health{% endblock %}
+
+{% block content %}
+<hgroup>
+    <h1>Context Health</h1>
+    <p>Is the engine generating decision-ready context, and at what cost?</p>
+</hgroup>
+
+<div class="stats-grid">
+    <article class="stat-card">
+        <h2>{{ health.builds.last_7d }}</h2>
+        <small>Builds (7d)</small>
+    </article>
+    <article class="stat-card">
+        <h2>{{ "%.2f"|format(health.builds.avg_context_score_7d) }}</h2>
+        <small>Avg context score (7d)</small>
+    </article>
+    <article class="stat-card">
+        <h2>{{ "%.0f"|format(health.builds.fallback_rate_7d * 100) }}%</h2>
+        <small>Fallback rate (7d)</small>
+    </article>
+    <article class="stat-card">
+        <h2>{% if health.builds.cost_per_decision_7d_usd is not none %}${{ "%.4f"|format(health.builds.cost_per_decision_7d_usd) }}{% else %}—{% endif %}</h2>
+        <small>Cost per decision (7d)</small>
+    </article>
+    <article class="stat-card">
+        <h2>{{ "%.0f"|format(health.builds.avg_duration_ms_7d) }}ms</h2>
+        <small>Avg build time (7d)</small>
+    </article>
+    <article class="stat-card">
+        <h2>{{ health.builds.flagged_useful_7d }}</h2>
+        <small>Flagged useful (7d)</small>
+    </article>
+</div>
+
+<section>
+    <h2>Consolidation clocks</h2>
+    <table>
+        <thead><tr><th>clock</th><th>runs (7d)</th><th>failures (7d)</th><th>last run</th></tr></thead>
+        <tbody>
+        {% for c in health.consolidation %}
+            <tr>
+                <td>{{ c.clock }}</td>
+                <td>{{ c.runs_7d }}</td>
+                <td {% if c.failures_7d %}style="color:#f87171"{% endif %}>{{ c.failures_7d }}</td>
+                <td>{{ c.last_run }}</td>
+            </tr>
+        {% else %}
+            <tr><td colspan="4">No runs yet</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</section>
+
+<section>
+    <h2>Store composition &amp; freshness</h2>
+    <table>
+        <thead><tr><th>kind</th><th>status</th><th>files</th><th>avg age (days)</th></tr></thead>
+        <tbody>
+        {% for s in health.store %}
+            <tr>
+                <td>{{ s.kind }}</td><td>{{ s.status }}</td><td>{{ s.n }}</td>
+                <td>{{ "%.1f"|format(s.avg_age_days) }}</td>
+            </tr>
+        {% else %}
+            <tr><td colspan="4">Store is empty</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</section>
+
+<section>
+    <h2>Recent builds</h2>
+    <table>
+        <thead><tr><th>when</th><th>principal</th><th>goal</th><th>score</th><th>coverage</th><th>fallback</th><th>tokens</th></tr></thead>
+        <tbody>
+        {% for b in recent_builds %}
+            <tr>
+                <td>{{ b.created_at.strftime('%b %d %H:%M') if b.created_at else '' }}</td>
+                <td>{{ b.principal_id }}</td>
+                <td>{{ b.goal[:60] }}</td>
+                <td>{{ "%.2f"|format(b.context_score) if b.context_score is not none else '—' }}</td>
+                <td>{{ "%.2f"|format(b.coverage) if b.coverage is not none else '—' }}</td>
+                <td>{{ "yes" if b.fallback_used else "" }}</td>
+                <td>{{ b.artifact_tokens }}</td>
+            </tr>
+        {% else %}
+            <tr><td colspan="7">No builds yet — connect a harness (see docs/connectors.md)</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</section>
+{% endblock %}

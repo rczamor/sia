@@ -1,4 +1,4 @@
-.PHONY: dev build up down migrate seed test lint
+.PHONY: dev build up down migrate test lint typecheck check
 
 dev:
 	docker compose up --build
@@ -15,11 +15,10 @@ down:
 migrate:
 	docker compose exec engine alembic upgrade head
 
-seed:
-	docker compose exec engine python scripts/seed_data.py
-
 test:
 	docker compose exec engine pytest
 
 lint:
-	docker compose exec engine ruff check app/
+	docker compose exec engine ruff check app/ tests/
+
+check: lint test

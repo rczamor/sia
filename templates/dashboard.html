@@ -30,14 +30,14 @@
 <section>
     <h2>Quick Actions</h2>
     <div class="grid">
-        <form hx-post="/api/ingest/url" hx-target="#ingest-result" hx-indicator="#ingest-spinner">
+        <form hx-ext="json-form" hx-post="/api/ingest/url" hx-target="#ingest-result" hx-indicator="#ingest-spinner">
             <fieldset role="group">
                 <input type="url" name="url" placeholder="Paste a URL to ingest..." required>
                 <button type="submit">Ingest</button>
             </fieldset>
             <span id="ingest-spinner" class="htmx-indicator" aria-busy="true">Processing...</span>
         </form>
-        <form hx-post="/api/ingest/thought" hx-target="#thought-result" hx-indicator="#thought-spinner">
+        <form hx-ext="json-form" data-json-arrays="pillar" hx-post="/api/ingest/thought" hx-target="#thought-result" hx-indicator="#thought-spinner">
             <fieldset role="group">
                 <input type="text" name="content" placeholder="Quick thought..." required>
                 <button type="submit">Save</button>

@@ -1,9 +1,23 @@
 import uuid
+from datetime import datetime
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.tables import ContentVersions
+
+
+def _jsonable(value):
+    """Snapshots come straight from ORM rows; coerce non-JSON types defensively."""
+    if isinstance(value, dict):
+        return {k: _jsonable(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_jsonable(v) for v in value]
+    if isinstance(value, datetime):
+        return value.isoformat()
+    if isinstance(value, uuid.UUID):
+        return str(value)
+    return value
 
 
 class VersioningService:
@@ -20,6 +34,7 @@ class VersioningService:
         change_type: str = "create",
         change_reason: str | None = None,
     ) -> ContentVersions:
+        content_snapshot = _jsonable(content_snapshot)
         # Get next version number
         result = await self.db.execute(
             select(func.max(ContentVersions.version_number)).where(

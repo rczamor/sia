@@ -64,32 +64,6 @@ class LLMOpsProvider(Protocol):
 
 
 @dataclass
-class PublishResult:
-    platform_post_id: str
-    url: str | None = None
-
-
-@dataclass
-class PostMetrics:
-    impressions: int = 0
-    likes: int = 0
-    comments: int = 0
-    shares: int = 0
-    bookmarks: int = 0
-    engagement_rate: float = 0.0
-
-
-@runtime_checkable
-class PublishingChannel(Protocol):
-    @property
-    def channel_name(self) -> str: ...
-
-    async def publish(self, content: str, **kwargs) -> PublishResult: ...
-
-    async def get_metrics(self, platform_post_id: str) -> PostMetrics: ...
-
-
-@dataclass
 class RawContent:
     title: str
     url: str

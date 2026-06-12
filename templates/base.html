@@ -3,9 +3,10 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>{% block title %}Sia{% endblock %} — Context Layer Engine</title>
+    <title>{% block title %}Sia{% endblock %} — Context Engine</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
     <script src="https://unpkg.com/htmx.org@2.0.4"></script>
+    <script src="/static/js/json-form.js" defer></script>
     <style>
         :root {
             --pico-font-family: system-ui, -apple-system, sans-serif;
@@ -23,6 +24,10 @@
         .result-item:last-child { border-bottom: none; }
         .result-score { opacity: 0.5; font-size: 0.8rem; }
         .htmx-indicator { display: none; }
+        pre.diff { max-height: 28rem; overflow: auto; font-size: 0.78rem; line-height: 1.35; }
+        .diff-add { color: #4ade80; }
+        .diff-del { color: #f87171; }
+        .diff-hunk { color: #38bdf8; }
         .htmx-request .htmx-indicator { display: inline; }
     </style>
 </head>
@@ -35,13 +40,18 @@
             <li><a href="/admin/dashboard" {% if active == "dashboard" %}class="active"{% endif %}>Dashboard</a></li>
             <li><a href="/admin/knowledge" {% if active == "knowledge" %}class="active"{% endif %}>Knowledge</a></li>
             <li><a href="/admin/ingest" {% if active == "ingest" %}class="active"{% endif %}>Ingest</a></li>
+            <li><a href="/admin/review" {% if active == "review" %}class="active"{% endif %}>Review</a></li>
+            <li><a href="/admin/graph" {% if active == "graph" %}class="active"{% endif %}>Graph</a></li>
+            <li><a href="/admin/inspector" {% if active == "inspector" %}class="active"{% endif %}>Inspector</a></li>
+            <li><a href="/admin/health" {% if active == "health" %}class="active"{% endif %}>Health</a></li>
+            <li><a href="/logout">Sign out</a></li>
         </ul>
     </nav>
     <main class="container">
         {% block content %}{% endblock %}
     </main>
     <footer class="container">
-        <small>Sia — Context Layer Engine v0.1.0</small>
+        <small>Sia — Context Engine v0.1.0</small>
     </footer>
 </body>
 </html>

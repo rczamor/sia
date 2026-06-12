@@ -1,13 +1,19 @@
+import logging
 import uuid
 
+import httpx
 import trafilatura
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.data.quarantine import quarantine_reason
 from app.prompts.source_analyst import CLASSIFY_AND_SUMMARIZE
 from app.providers.base import EmbeddingProvider
-from app.services.knowledge_store import KnowledgeStore
-from app.services.lineage import LineageService, TrackedLLMProvider
-from app.services.versioning import VersioningService
+from app.data.knowledge_store import KnowledgeStore
+from app.data.lineage import TrackedLLMProvider
+from app.data.url_safety import UnsafeURLError, fetch_public_url
+from app.data.versioning import VersioningService
+
+logger = logging.getLogger(__name__)
 
 
 class IngestionService:
@@ -18,11 +24,16 @@ class IngestionService:
         db: AsyncSession,
         llm: TrackedLLMProvider,
         embedder: EmbeddingProvider,
+        classify_params: dict | None = None,
     ):
         self.db = db
         self.llm = llm
         self.store = KnowledgeStore(db, embedder)
         self.versioning = VersioningService(db)
+        # Model selection for classification comes from ai_config (llm_classification).
+        self.classify_params = classify_params or {}
+        self.classify_model = self.classify_params.get("model", "claude-haiku-4-5-20251001")
+        self.classify_temperature = self.classify_params.get("temperature", 0.3)
 
     async def ingest_url(
         self,
@@ -34,8 +45,14 @@ class IngestionService:
         if await self.store.url_exists(url):
             return {"error": "URL already exists in knowledge base", "url": url}
 
-        # 2. Fetch content
-        downloaded = trafilatura.fetch_url(url)
+        # 2. Fetch content (SSRF-guarded: scheme allowlist, public hosts only,
+        #    redirects re-validated per hop)
+        try:
+            downloaded = await fetch_public_url(url)
+        except UnsafeURLError as exc:
+            return {"error": f"URL refused: {exc}", "url": url}
+        except httpx.HTTPError as exc:
+            return {"error": f"Could not fetch URL content: {exc}", "url": url}
         if not downloaded:
             return {"error": "Could not fetch URL content", "url": url}
 
@@ -72,8 +89,8 @@ class IngestionService:
                 "tags": ["string"],
                 "source_type": "string",
             },
-            model="claude-haiku-4-5-20251001",
-            temperature=0.3,
+            model=self.classify_model,
+            temperature=self.classify_temperature,
             operation_type="classify",
             prompt_name="source_analyst",
         )
@@ -83,7 +100,13 @@ class IngestionService:
         tags = analysis.get("tags", [])
         source_type = analysis.get("source_type", "article")
 
-        # 4. Store in knowledge base (embedding happens inside add_source)
+        # 4. Quarantine screen: injection markers, oversize, off-domain content is
+        # stored for audit but never consolidated until an operator clears it.
+        reason = quarantine_reason(extracted, pillars=analysis.get("pillars"))
+
+        # 5. Store in knowledge base (embedding happens inside add_source).
+        # Trust tier: an annotated item passed through human hands (curated);
+        # a bare URL or feed item is untrusted until the review gate clears it.
         item = await self.store.add_source(
             title=title,
             url=url,
@@ -94,28 +117,29 @@ class IngestionService:
             author=author,
             your_notes=notes,
             tags=tags,
+            trust_tier="curated" if notes else "untrusted",
+            quarantined=reason is not None,
         )
+        if reason:
+            logger.warning("Quarantined source %s (%s): %s", item.id, url, reason)
 
-        # 5. Create version record
+        # 6. Create version record. Include `content` so a restore to this initial
+        # version is complete (and re-embeds from a fully-restored state rather than
+        # blending old metadata with whatever content is current).
         await self.versioning.create_version(
             entity_type="source_content",
             entity_id=item.id,
             content_snapshot={
-                "title": title, "url": url, "summary": summary,
+                "title": title, "url": url, "summary": summary, "content": extracted,
                 "pillar": pillars, "source_type": source_type, "tags": tags,
             },
             change_type="create",
         )
 
-        # 6. Find related items
-        related = await self.store.hybrid_search(
-            query=f"{title} {summary}", limit=5
-        )
-        # Filter out self
-        related = [r for r in related if r["id"] != item.id]
-
         await self.db.commit()
 
+        # Related-item discovery is a Retrieval-layer concern; the API layer
+        # composes it onto this result.
         return {
             "id": str(item.id),
             "title": title,
@@ -123,7 +147,7 @@ class IngestionService:
             "pillar": pillars,
             "tags": tags,
             "source_type": source_type,
-            "related": related[:5],
+            "quarantined": reason,
         }
 
     async def ingest_thought(
@@ -138,8 +162,8 @@ class IngestionService:
             analysis = await self.llm.complete_structured(
                 messages=[{"role": "user", "content": f"Classify this thought into pillars: {content[:2000]}"}],
                 schema={"pillars": ["string"]},
-                model="claude-haiku-4-5-20251001",
-                temperature=0.3,
+                model=self.classify_model,
+                temperature=self.classify_temperature,
                 operation_type="classify",
                 prompt_name="thought_classifier",
             )

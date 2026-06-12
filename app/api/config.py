@@ -3,7 +3,7 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.models.schemas import ConfigResponse, ConfigUpdateRequest
+from app.models.schemas import ConfigUpdateRequest
 from app.models.tables import AiConfig
 
 router = APIRouter(prefix="/api/config", tags=["config"])
