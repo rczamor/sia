@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import delete, func, select, text, update
+from sqlalchemy import delete, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.tables import (
@@ -235,29 +235,23 @@ class KnowledgeStore:
             else:
                 continue
 
-            # Pillar filter
-            pillar_clause = ""
-            if pillar:
-                pillar_array = "{" + ",".join(pillar) + "}"
-                pillar_clause = f"AND pillar && '{pillar_array}'::text[]"
-
-            # Date filter
-            date_clause = ""
-            if date_from:
-                date_clause += f" AND created_at >= '{date_from.isoformat()}'"
-            if date_to:
-                date_clause += f" AND created_at <= '{date_to.isoformat()}'"
+            # Optional filters — always bound parameters, never interpolated values.
+            # (table/column names come from the hardcoded TABLE_MAP above.)
+            pillar_clause = "AND pillar && CAST(:pillar_filter AS text[])" if pillar else ""
+            date_from_clause = "AND created_at >= :date_from" if date_from else ""
+            date_to_clause = "AND created_at <= :date_to" if date_to else ""
 
             sql = text(f"""
                 WITH semantic AS (
                     SELECT id, {title_col} as title, {preview_col} as content_preview,
                            pillar, created_at,
-                           1 - (embedding <=> :query_vec::vector) as semantic_score
+                           1 - (embedding <=> CAST(:query_vec AS vector)) as semantic_score
                     FROM {table_name}
                     WHERE embedding IS NOT NULL
-                    AND 1 - (embedding <=> :query_vec::vector) > :threshold
+                    AND 1 - (embedding <=> CAST(:query_vec AS vector)) > :threshold
                     {pillar_clause}
-                    {date_clause}
+                    {date_from_clause}
+                    {date_to_clause}
                 ),
                 keyword AS (
                     SELECT id, ts_rank_cd(search_vector, plainto_tsquery('english', :query_text)) as keyword_score
@@ -272,17 +266,22 @@ class KnowledgeStore:
                 LIMIT :lim
             """)
 
-            result = await self.db.execute(
-                sql,
-                {
-                    "query_vec": str(query_embedding),
-                    "query_text": query,
-                    "threshold": threshold,
-                    "sem_w": semantic_weight,
-                    "kw_w": keyword_weight,
-                    "lim": limit,
-                },
-            )
+            params: dict[str, Any] = {
+                "query_vec": str(query_embedding),
+                "query_text": query,
+                "threshold": threshold,
+                "sem_w": semantic_weight,
+                "kw_w": keyword_weight,
+                "lim": limit,
+            }
+            if pillar:
+                params["pillar_filter"] = pillar
+            if date_from:
+                params["date_from"] = date_from
+            if date_to:
+                params["date_to"] = date_to
+
+            result = await self.db.execute(sql, params)
 
             for row in result.mappings().all():
                 all_results.append({

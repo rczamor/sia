@@ -144,70 +144,6 @@ class Consolidations(Base):
     )
 
 
-class GeneratedPosts(Base):
-    __tablename__ = "generated_posts"
-
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    content: Mapped[str] = mapped_column(Text, nullable=False)
-    channel: Mapped[str] = mapped_column(String(50), default="linkedin")
-    template_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
-    pillar: Mapped[list[str]] = mapped_column(ARRAY(String), default=list)
-    hook_style: Mapped[str | None] = mapped_column(String(100))
-    source_ids: Mapped[list[uuid.UUID]] = mapped_column(
-        ARRAY(UUID(as_uuid=True)), default=list
-    )
-    thought_ids: Mapped[list[uuid.UUID]] = mapped_column(
-        ARRAY(UUID(as_uuid=True)), default=list
-    )
-    consolidation_ids: Mapped[list[uuid.UUID]] = mapped_column(
-        ARRAY(UUID(as_uuid=True)), default=list
-    )
-    experiment_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
-    langfuse_prompt_version: Mapped[str | None] = mapped_column(String(100))
-    fact_check_status: Mapped[str] = mapped_column(String(50), default="pending")
-    fact_check_details: Mapped[dict | None] = mapped_column(JSONB)
-    quality_score: Mapped[float | None] = mapped_column(Float)
-    quality_details: Mapped[dict | None] = mapped_column(JSONB)
-    status: Mapped[str] = mapped_column(String(50), default="draft")
-    platform_post_id: Mapped[str | None] = mapped_column(String(255))
-    impressions: Mapped[int] = mapped_column(Integer, default=0)
-    engagement_rate: Mapped[float] = mapped_column(Float, default=0.0)
-    likes: Mapped[int] = mapped_column(Integer, default=0)
-    comments: Mapped[int] = mapped_column(Integer, default=0)
-    shares: Mapped[int] = mapped_column(Integer, default=0)
-    bookmarks: Mapped[int] = mapped_column(Integer, default=0)
-    embedding = mapped_column(Vector(768), nullable=True)
-    search_vector = mapped_column(TSVECTOR, nullable=True)
-    scheduled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
-    )
-
-    __table_args__ = (
-        Index("ix_generated_posts_status", "status"),
-        Index("ix_generated_posts_channel", "channel"),
-        Index("ix_generated_posts_pillar", "pillar", postgresql_using="gin"),
-    )
-
-
-class Experiments(Base):
-    __tablename__ = "experiments"
-
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    hypothesis: Mapped[str] = mapped_column(Text, nullable=False)
-    variable: Mapped[str] = mapped_column(Text, nullable=False)
-    variant_a: Mapped[str] = mapped_column(Text, nullable=False)
-    variant_b: Mapped[str] = mapped_column(Text, nullable=False)
-    status: Mapped[str] = mapped_column(String(50), default="active")
-    result_summary: Mapped[str | None] = mapped_column(Text)
-    winner: Mapped[str | None] = mapped_column(String(10))
-    started_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
-    )
-    concluded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-
-
 class ContentVersions(Base):
     __tablename__ = "content_versions"
 
@@ -299,22 +235,3 @@ class Plugins(Base):
     )
 
 
-class OutputTemplates(Base):
-    __tablename__ = "output_templates"
-
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    name: Mapped[str] = mapped_column(String(255), nullable=False)
-    description: Mapped[str | None] = mapped_column(Text)
-    target_channels: Mapped[list[str]] = mapped_column(ARRAY(String), default=list)
-    prompt_template: Mapped[str] = mapped_column(Text, nullable=False)
-    variables: Mapped[dict] = mapped_column(JSONB, default=dict)
-    constraints: Mapped[dict] = mapped_column(JSONB, default=dict)
-    example_output: Mapped[str | None] = mapped_column(Text)
-    schedule_slot: Mapped[str | None] = mapped_column(String(50))
-    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
-    )
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
-    )

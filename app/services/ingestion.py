@@ -1,12 +1,14 @@
 import uuid
 
+import httpx
 import trafilatura
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.prompts.source_analyst import CLASSIFY_AND_SUMMARIZE
 from app.providers.base import EmbeddingProvider
 from app.services.knowledge_store import KnowledgeStore
-from app.services.lineage import LineageService, TrackedLLMProvider
+from app.services.lineage import TrackedLLMProvider
+from app.services.url_safety import UnsafeURLError, fetch_public_url
 from app.services.versioning import VersioningService
 
 
@@ -34,8 +36,14 @@ class IngestionService:
         if await self.store.url_exists(url):
             return {"error": "URL already exists in knowledge base", "url": url}
 
-        # 2. Fetch content
-        downloaded = trafilatura.fetch_url(url)
+        # 2. Fetch content (SSRF-guarded: scheme allowlist, public hosts only,
+        #    redirects re-validated per hop)
+        try:
+            downloaded = await fetch_public_url(url)
+        except UnsafeURLError as exc:
+            return {"error": f"URL refused: {exc}", "url": url}
+        except httpx.HTTPError as exc:
+            return {"error": f"Could not fetch URL content: {exc}", "url": url}
         if not downloaded:
             return {"error": "Could not fetch URL content", "url": url}
 

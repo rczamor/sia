@@ -46,21 +46,6 @@ class ConsolidationType(str, enum.Enum):
     GAP = "gap"
 
 
-class PostStatus(str, enum.Enum):
-    DRAFT = "draft"
-    REVIEW = "review"
-    APPROVED = "approved"
-    PUBLISHED = "published"
-    REJECTED = "rejected"
-
-
-class FactCheckStatus(str, enum.Enum):
-    PENDING = "pending"
-    PASSED = "passed"
-    FLAGGED = "flagged"
-    OVERRIDDEN = "overridden"
-
-
 class ChangeType(str, enum.Enum):
     CREATE = "create"
     UPDATE = "update"
@@ -74,29 +59,16 @@ class OperationType(str, enum.Enum):
     CLASSIFY = "classify"
     SUMMARIZE = "summarize"
     EMBED = "embed"
-    GENERATE = "generate"
-    FACT_CHECK = "fact_check"
-    QUALITY_EVAL = "quality_eval"
     CONSOLIDATE = "consolidate"
-    DIALOGUE = "dialogue"
-
-
-class Channel(str, enum.Enum):
-    LINKEDIN = "linkedin"
-    X = "x"
-    NEWSLETTER = "newsletter"
-
-
-class ExperimentStatus(str, enum.Enum):
-    ACTIVE = "active"
-    CONCLUDED = "concluded"
-    ARCHIVED = "archived"
+    BUILD = "build"
 
 
 class PluginCategory(str, enum.Enum):
-    PUBLISHING = "publishing"
+    LLM = "llm"
+    EMBEDDINGS = "embeddings"
     INGESTION = "ingestion"
     LLMOPS = "llmops"
+    STORE_BACKEND = "store_backend"
     OPTIMIZATION = "optimization"
 
 
@@ -105,4 +77,3 @@ class EntityType(str, enum.Enum):
     MY_THOUGHTS = "my_thoughts"
     EXPERTISE_ARTIFACTS = "expertise_artifacts"
     CONSOLIDATIONS = "consolidations"
-    GENERATED_POSTS = "generated_posts"

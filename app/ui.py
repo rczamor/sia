@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import func, select
@@ -27,8 +27,7 @@ async def dashboard(request: Request, db: AsyncSession = Depends(get_db)):
     )
     recent_items = recent.scalars().all()
 
-    return templates.TemplateResponse("dashboard.html", {
-        "request": request,
+    return templates.TemplateResponse(request, "dashboard.html", {
         "stats": {
             "sources": sources_count,
             "thoughts": thoughts_count,
@@ -52,8 +51,7 @@ async def knowledge_browser(
         pillar_filter = [pillar] if pillar else None
         results = await store.hybrid_search(query=q, pillar=pillar_filter, limit=20)
 
-    return templates.TemplateResponse("knowledge.html", {
-        "request": request,
+    return templates.TemplateResponse(request, "knowledge.html", {
         "query": q,
         "pillar": pillar,
         "results": results,
@@ -74,12 +72,11 @@ async def knowledge_search_partial(
         pillar_filter = [pillar] if pillar else None
         results = await store.hybrid_search(query=q, pillar=pillar_filter, limit=20)
 
-    return templates.TemplateResponse("partials/search_results.html", {
-        "request": request,
+    return templates.TemplateResponse(request, "partials/search_results.html", {
         "results": results,
     })
 
 
 @router.get("/admin/ingest", response_class=HTMLResponse)
 async def ingest_page(request: Request):
-    return templates.TemplateResponse("ingest.html", {"request": request})
+    return templates.TemplateResponse(request, "ingest.html", {})

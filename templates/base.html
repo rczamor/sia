@@ -3,9 +3,10 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>{% block title %}Sia{% endblock %} — Context Layer Engine</title>
+    <title>{% block title %}Sia{% endblock %} — Context Engine</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
     <script src="https://unpkg.com/htmx.org@2.0.4"></script>
+    <script src="/static/js/json-form.js" defer></script>
     <style>
         :root {
             --pico-font-family: system-ui, -apple-system, sans-serif;
@@ -41,7 +42,7 @@
         {% block content %}{% endblock %}
     </main>
     <footer class="container">
-        <small>Sia — Context Layer Engine v0.1.0</small>
+        <small>Sia — Context Engine v0.1.0</small>
     </footer>
 </body>
 </html>

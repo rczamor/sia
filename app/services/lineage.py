@@ -71,7 +71,7 @@ class TrackedLLMProvider:
         model: str | None = None,
         temperature: float | None = None,
         max_tokens: int | None = None,
-        operation_type: str = "generate",
+        operation_type: str = "classify",
         prompt_name: str | None = None,
         input_content_ids: list[uuid.UUID] | None = None,
     ) -> LLMResponse:
@@ -109,7 +109,7 @@ class TrackedLLMProvider:
         model: str | None = None,
         temperature: float | None = None,
         max_tokens: int | None = None,
-        operation_type: str = "generate",
+        operation_type: str = "classify",
         prompt_name: str | None = None,
         input_content_ids: list[uuid.UUID] | None = None,
     ) -> dict[str, Any]:

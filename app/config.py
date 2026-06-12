@@ -26,9 +26,6 @@ class Settings(BaseSettings):
     feedly_access_token: str = ""
     feedly_board_id: str = ""
 
-    # Webhooks
-    n8n_webhook_secret: str = ""
-
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 
 

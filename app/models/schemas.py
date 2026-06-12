@@ -5,16 +5,7 @@ from pydantic import BaseModel, HttpUrl
 
 from app.models.enums import (
     ArtifactType,
-    Channel,
-    ChangeType,
-    ConsolidationType,
-    EntityType,
-    ExperimentStatus,
-    FactCheckStatus,
     Pillar,
-    PostStatus,
-    SourceType,
-    ThoughtMaturity,
     ThoughtType,
 )
 
@@ -44,15 +35,6 @@ class IngestArtifactRequest(BaseModel):
 
 
 # --- Knowledge ---
-
-
-class SearchRequest(BaseModel):
-    query: str
-    tables: list[EntityType] | None = None
-    pillar: list[Pillar] | None = None
-    date_from: datetime | None = None
-    date_to: datetime | None = None
-    limit: int = 20
 
 
 class SearchResult(BaseModel):
