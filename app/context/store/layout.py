@@ -115,6 +115,23 @@ priority: 0.8
 """
 
 
+REGRESSION_README = """# Regression fixtures
+
+Golden goal -> expected-context pairs, run by the deep clock after every weekly
+consolidation (and available to CI). One YAML file per fixture:
+
+```yaml
+goal: "prep for the pricing decision"
+expect_paths:
+  - knowledge/product_mgmt/pricing-strategy.md
+min_coverage: 0.3
+```
+
+A fixture fails if any expected path is missing from the built artifact or coverage
+drops below the floor. Hand-pick ~15 goals you actually ask about.
+"""
+
+
 async def scaffold_store(store: GitContextStore) -> str:
     """Create the initial layout if the store is empty. Returns HEAD sha."""
     existing = await store.list_paths()
@@ -123,6 +140,7 @@ async def scaffold_store(store: GitContextStore) -> str:
 
     today = datetime.now(timezone.utc).date().isoformat()
     files = {
+        ".gitignore": ".sia/lock\n",
         ".sia/store-spec.md": STORE_SPEC,
         "INDEX.md": f"# INDEX\n\nGenerated {today}. Empty store — ingest and consolidate.\n",
         "profile/identity.md": IDENTITY_TEMPLATE,
@@ -133,6 +151,6 @@ async def scaffold_store(store: GitContextStore) -> str:
         "knowledge/.gitkeep": "",
         "skills/.gitkeep": "",
         "theses/.gitkeep": "",
-        ".sia/regression/.gitkeep": "",
+        ".sia/regression/README.md": REGRESSION_README,
     }
     return await store.commit(files, "chore: scaffold context store")

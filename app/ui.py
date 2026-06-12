@@ -95,6 +95,28 @@ async def graph_page(request: Request):
     return templates.TemplateResponse(request, "graph.html", {})
 
 
+@router.get("/admin/health", response_class=HTMLResponse)
+async def health_page(request: Request, db: AsyncSession = Depends(get_db)):
+    from sqlalchemy import select as sa_select
+
+    from app.api.context import context_health
+    from app.models.tables import ContextBuilds
+
+    health = await context_health(db)
+    recent = (
+        (
+            await db.execute(
+                sa_select(ContextBuilds).order_by(ContextBuilds.created_at.desc()).limit(15)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    return templates.TemplateResponse(
+        request, "health.html", {"health": health, "recent_builds": recent}
+    )
+
+
 @router.get("/admin/inspector", response_class=HTMLResponse)
 async def inspector_page(request: Request, db: AsyncSession = Depends(get_db)):
     from app.context.principals import PrincipalService

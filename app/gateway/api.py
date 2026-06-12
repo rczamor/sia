@@ -30,9 +30,9 @@ async def build_context(
     registered budget/visibility; anonymous callers run as the visitor principal."""
     principal = request.state.principal
     runtime = await get_runtime()
-    builder = runtime.context_builder(db)
     try:
-        artifact = await builder.build(
+        artifact = await runtime.build_context(
+            db,
             goal=body.goal,
             principal=principal,
             budget_tokens=body.budget_tokens,

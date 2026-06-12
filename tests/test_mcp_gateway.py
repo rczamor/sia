@@ -36,21 +36,8 @@ async def test_tools_require_principal():
         await gateway.sia_list_topics()
 
 
-async def test_build_context_tool_returns_artifact(db_session, store, as_owner, monkeypatch):
-    embedder = await seed(db_session, store)
-
-    class FakeRuntime:
-        context_store = store
-
-        def context_builder(self, db):
-            from app.context.builder import ContextBuilder
-
-            return ContextBuilder(db, store, embedder)
-
-    async def fake_get_runtime():
-        return FakeRuntime()
-
-    monkeypatch.setattr("app.runtime.get_runtime", fake_get_runtime)
+async def test_build_context_tool_returns_artifact(db_session, store, as_owner, fake_runtime):
+    await seed(db_session, store)
     result = await gateway.sia_build_context(goal="reciprocal rank fusion")
     assert "# Context for: reciprocal rank fusion" in result
     assert "build_id:" in result

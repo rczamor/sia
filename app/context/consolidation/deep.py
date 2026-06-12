@@ -78,10 +78,13 @@ class DeepClock:
         indexer = StoreIndexer(self.db, self.store, self.embedder)
         await indexer.sync()
 
+        # 5. Regression suite against the post-consolidation store
+        regression_summary = await self._run_regression()
+
         changed = sorted(files_main) + ([skill_path] if skill_path else [])
         summary = (
             f"{entities_added} entities, {pruned} pruned, "
-            f"skill draft: {skill_path or 'none'}"
+            f"skill draft: {skill_path or 'none'}, regression: {regression_summary}"
         )
         await finish_run(
             self.db, run, changed, summary, branch=branch if skill_path else None
@@ -92,6 +95,27 @@ class DeepClock:
             "skill_draft": skill_path,
             "files_changed": changed,
         }
+
+    async def _run_regression(self) -> str:
+        from app.context.builder import ContextBuilder
+        from app.context.consolidation.base import send_alert
+        from app.context.quality import run_regression
+
+        builder = ContextBuilder(self.db, self.store, self.embedder)
+        results = await run_regression(self.db, self.store, builder)
+        if not results:
+            return "no fixtures"
+        failed = [r for r in results if not r.passed]
+        if failed:
+            details = "; ".join(
+                f"{r.fixture} missing {r.missing_paths} (coverage {r.coverage:.2f})"
+                for r in failed[:5]
+            )
+            await send_alert(
+                f":warning: Sia regression: {len(failed)}/{len(results)} golden builds "
+                f"failed after deep consolidation — {details}"
+            )
+        return f"{len(results) - len(failed)}/{len(results)} passed"
 
     async def _extract_entities(self, graph: GraphService, run) -> int:
         rows = (

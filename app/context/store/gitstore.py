@@ -78,7 +78,9 @@ class GitContextStore:
             },
         )
         if check and result.returncode != 0:
-            raise StoreError(f"git {' '.join(args)} failed: {result.stderr.strip()}")
+            raise StoreError(
+                f"git {' '.join(args)} failed: {result.stderr.strip() or result.stdout.strip()}"
+            )
         return result.stdout
 
     @contextmanager
@@ -128,8 +130,8 @@ class GitContextStore:
                 target.parent.mkdir(parents=True, exist_ok=True)
                 target.write_text(content, encoding="utf-8")
                 self._git("add", rel_path, cwd=tree)
-        status = self._git("status", "--porcelain", cwd=tree)
-        if not status.strip():
+        staged = self._git("diff", "--cached", "--name-only", cwd=tree)
+        if not staged.strip():
             return self._git("rev-parse", "HEAD", cwd=tree).strip()
         self._git("commit", "-q", "-m", message, cwd=tree)
         return self._git("rev-parse", "HEAD", cwd=tree).strip()

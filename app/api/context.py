@@ -52,8 +52,20 @@ async def graph_data(db: AsyncSession = Depends(get_db)):
     sections = (
         await db.execute(
             text(
-                "SELECT path, kind, title, pillar, status, priority FROM context_sections "
-                "WHERE kind IN ('topic', 'skill')"
+                """
+                SELECT s.path, s.kind, s.title, s.pillar, s.status, s.priority,
+                       coalesce(EXTRACT(EPOCH FROM (now() - s.freshness)) / 86400, 999)
+                           AS age_days,
+                       coalesce(u.uses, 0) AS uses
+                FROM context_sections s
+                LEFT JOIN (
+                    SELECT item->>'path' AS path, count(*) AS uses
+                    FROM context_builds, jsonb_array_elements(served) AS item
+                    WHERE created_at > now() - interval '30 days'
+                    GROUP BY item->>'path'
+                ) u ON u.path = s.path
+                WHERE s.kind IN ('topic', 'skill')
+                """
             )
         )
     ).mappings()
@@ -76,6 +88,8 @@ async def graph_data(db: AsyncSession = Depends(get_db)):
             "pillar": s["pillar"],
             "status": s["status"],
             "priority": s["priority"],
+            "age_days": round(float(s["age_days"]), 1),
+            "uses_30d": int(s["uses"]),
         }
     for e in entities:
         ref = f"entity:{e['id']}"
@@ -86,6 +100,8 @@ async def graph_data(db: AsyncSession = Depends(get_db)):
             "pillar": None,
             "status": "active",
             "priority": 0.4,
+            "age_days": 0,
+            "uses_30d": 0,
         }
 
     edge_list = []
@@ -101,6 +117,90 @@ async def graph_data(db: AsyncSession = Depends(get_db)):
                 }
             )
     return {"nodes": list(nodes.values()), "edges": edge_list}
+
+
+@router.get("/health")
+async def context_health(db: AsyncSession = Depends(get_db)):
+    """Context-health metrics: build quality, fallback rate, cost-per-decision,
+    consolidation throughput, store freshness."""
+    builds = (
+        await db.execute(
+            text(
+                """
+                SELECT count(*) AS total,
+                       count(*) FILTER (WHERE created_at > now() - interval '7 days') AS last_7d,
+                       coalesce(avg(context_score) FILTER (
+                           WHERE created_at > now() - interval '7 days'), 0) AS avg_score_7d,
+                       coalesce(avg(duration_ms) FILTER (
+                           WHERE created_at > now() - interval '7 days'), 0) AS avg_duration_7d,
+                       coalesce(
+                           avg(CASE WHEN fallback_used THEN 1.0 ELSE 0.0 END) FILTER (
+                               WHERE created_at > now() - interval '7 days'), 0
+                       ) AS fallback_rate_7d,
+                       count(*) FILTER (
+                           WHERE flags->>'useful' = 'true'
+                             AND created_at > now() - interval '7 days') AS flagged_useful_7d
+                FROM context_builds
+                """
+            )
+        )
+    ).mappings().one()
+
+    llm_cost_7d = (
+        await db.execute(
+            text(
+                "SELECT coalesce(sum(cost_usd), 0) FROM process_lineage "
+                "WHERE created_at > now() - interval '7 days'"
+            )
+        )
+    ).scalar()
+
+    consolidation = (
+        await db.execute(
+            text(
+                """
+                SELECT clock,
+                       count(*) FILTER (WHERE started_at > now() - interval '7 days') AS runs_7d,
+                       count(*) FILTER (
+                           WHERE status = 'failed'
+                             AND started_at > now() - interval '7 days') AS failures_7d,
+                       max(started_at) AS last_run
+                FROM consolidation_runs GROUP BY clock
+                """
+            )
+        )
+    ).mappings()
+
+    store_stats = (
+        await db.execute(
+            text(
+                """
+                SELECT kind, status, count(*) AS n,
+                       coalesce(avg(EXTRACT(EPOCH FROM (now() - freshness)) / 86400), 0)
+                           AS avg_age_days
+                FROM context_sections GROUP BY kind, status
+                """
+            )
+        )
+    ).mappings()
+
+    builds_7d = builds["last_7d"] or 0
+    return {
+        "builds": {
+            "total": builds["total"],
+            "last_7d": builds_7d,
+            "avg_context_score_7d": round(float(builds["avg_score_7d"]), 3),
+            "avg_duration_ms_7d": round(float(builds["avg_duration_7d"]), 1),
+            "fallback_rate_7d": round(float(builds["fallback_rate_7d"]), 3),
+            "flagged_useful_7d": builds["flagged_useful_7d"],
+            "cost_per_decision_7d_usd": round(float(llm_cost_7d) / builds_7d, 4)
+            if builds_7d
+            else None,
+            "llm_cost_7d_usd": round(float(llm_cost_7d), 4),
+        },
+        "consolidation": [dict(row) for row in consolidation],
+        "store": [dict(row) for row in store_stats],
+    }
 
 
 @router.get("/runs")

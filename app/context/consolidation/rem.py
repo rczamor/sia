@@ -94,13 +94,16 @@ class RemClock:
         if contradictions:
             files["tensions/contradictions.md"] = await self._render_tensions(contradictions)
 
+        # 3. Citation-use ledger: priorities follow demonstrated usefulness
+        ledger_changes = await self._apply_citation_ledger(files)
+
         if files:
             await self.store.commit(files, "rem: re-gist + tensions", branch=None)
 
-        # 3. Refresh index + INDEX.md (always — freshness decay moves daily)
+        # 4. Refresh index + INDEX.md (always — freshness decay moves daily)
         await indexer.sync()
 
-        # 4. Refresh declared graph edges for changed files
+        # 5. Refresh declared graph edges for changed files
         graph = GraphService(self.db)
         for path in files:
             content = await self.store.read(path)
@@ -109,9 +112,67 @@ class RemClock:
                     self.serializer.loads(path, content), indexed, run_id=run.id
                 )
 
-        summary = f"re-gisted {len(files)} file(s), {len(contradictions)} contradiction(s)"
+        summary = (
+            f"re-gisted {len(files)} file(s), {len(contradictions)} contradiction(s), "
+            f"{ledger_changes} priority adjustment(s)"
+        )
         await finish_run(self.db, run, sorted(files), summary)
-        return {"files_changed": sorted(files), "contradictions": len(contradictions)}
+        return {
+            "files_changed": sorted(files),
+            "contradictions": len(contradictions),
+            "priority_adjustments": ledger_changes,
+        }
+
+    async def _apply_citation_ledger(self, files: dict[str, str]) -> int:
+        """Topics served in builds flagged useful gain priority; flagged-useless
+        lose it. Demonstrated usage, not assumed importance, drives ranking."""
+        from sqlalchemy import text as sql_text
+
+        rows = (
+            await self.db.execute(
+                sql_text(
+                    """
+                    SELECT served, flags FROM context_builds
+                    WHERE created_at > now() - interval '7 days'
+                      AND flags ? 'useful' AND NOT (flags ? 'ledger_applied')
+                    """
+                )
+            )
+        ).mappings().all()
+        deltas: dict[str, float] = {}
+        for row in rows:
+            delta = 0.05 if row["flags"].get("useful") else -0.05
+            for item in row["served"] or []:
+                path = item.get("path", "")
+                if path.startswith(("knowledge/", "skills/")):
+                    deltas[path] = deltas.get(path, 0.0) + delta
+
+        changed = 0
+        for path, delta in deltas.items():
+            content = files.get(path) or await self.store.read(path)
+            if not content:
+                continue
+            document = self.serializer.loads(path, content)
+            current = float(document.front.get("priority", 0.5))
+            updated = max(0.1, min(1.0, current + delta))
+            if abs(updated - current) < 1e-9:
+                continue
+            document.front["priority"] = round(updated, 2)
+            files[path] = self.serializer.dumps(document)
+            changed += 1
+
+        if rows:
+            await self.db.execute(
+                sql_text(
+                    """
+                    UPDATE context_builds
+                    SET flags = flags || '{"ledger_applied": true}'::jsonb
+                    WHERE created_at > now() - interval '7 days'
+                      AND flags ? 'useful' AND NOT (flags ? 'ledger_applied')
+                    """
+                )
+            )
+        return changed
 
     async def _recently_changed_topics(self):
         cutoff = datetime.now(timezone.utc) - timedelta(hours=CHANGED_WINDOW_HOURS)

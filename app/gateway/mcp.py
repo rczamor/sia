@@ -53,9 +53,9 @@ async def sia_build_context(
 
     runtime = await get_runtime()
     async with async_session() as db:
-        builder = runtime.context_builder(db)
-        artifact = await builder.build(
-            goal=goal, principal=_principal(), budget_tokens=budget_tokens, pillar_hint=pillar
+        artifact = await runtime.build_context(
+            db, goal=goal, principal=_principal(), budget_tokens=budget_tokens,
+            pillar_hint=pillar,
         )
     return artifact.to_markdown() + f"\n\n---\nbuild_id: {artifact.build_id}"
 

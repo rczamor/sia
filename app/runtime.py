@@ -13,7 +13,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.context.builder import ContextBuilder
+from app.context.builder import ContextArtifact, ContextBuilder
 from app.context.consolidation.deep import DeepClock
 from app.context.consolidation.light import LightClock
 from app.context.consolidation.rem import RemClock
@@ -113,6 +113,31 @@ class Runtime:
         return ContextBuilder(
             db, self.context_store, self.embedder, search_service=self.search_service(db)
         )
+
+    async def build_context(
+        self,
+        db: AsyncSession,
+        goal: str,
+        principal,
+        budget_tokens: int | None = None,
+        pillar_hint: str | None = None,
+    ) -> ContextArtifact:
+        """Build + score: every build gets a context_score and an LLM-ops trace."""
+        from app.context.quality import score_artifact
+
+        artifact = await self.context_builder(db).build(
+            goal=goal, principal=principal, budget_tokens=budget_tokens, pillar_hint=pillar_hint
+        )
+        score = await score_artifact(db, artifact)
+        trace_id = await self.llmops.trace(
+            name="context_build",
+            input_data={"goal": goal, "principal": principal.id},
+            output_data=score.to_dict(),
+            metadata={"build_id": str(artifact.build_id)},
+        )
+        if trace_id:
+            await self.llmops.score(trace_id, "context_score", score.composite)
+        return artifact
 
     def review_service(self, db: AsyncSession) -> ReviewService:
         return ReviewService(db, self.context_store, self.embedder)
