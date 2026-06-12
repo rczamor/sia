@@ -30,8 +30,14 @@ babel==2.18.0
     # via courlan
 backoff==2.2.1
     # via langfuse
+bandit==1.9.4
+    # via sia (pyproject.toml)
 bcrypt==5.0.0
     # via sia (pyproject.toml)
+boolean-py==5.0
+    # via license-expression
+cachecontrol==0.14.4
+    # via pip-audit
 certifi==2026.5.20
     # via
     #   httpcore
@@ -57,8 +63,12 @@ cryptography==49.0.0
     # via
     #   pyjwt
     #   python-jose
+cyclonedx-python-lib==11.10.0
+    # via pip-audit
 dateparser==1.4.0
     # via htmldate
+defusedxml==0.7.1
+    # via py-serializable
 distro==1.9.0
     # via anthropic
 docstring-parser==0.18.0
@@ -67,6 +77,8 @@ ecdsa==0.19.2
     # via python-jose
 fastapi==0.136.3
     # via sia (pyproject.toml)
+filelock==3.29.3
+    # via cachecontrol
 greenlet==3.5.1
     # via sqlalchemy
 grimp==3.14
@@ -111,6 +123,8 @@ justext==3.0.2
     # via trafilatura
 langfuse==2.60.10
     # via sia (pyproject.toml)
+license-expression==30.4.4
+    # via cyclonedx-python-lib
 lxml==6.1.1
     # via
     #   htmldate
@@ -131,15 +145,31 @@ mcp==1.27.2
     # via sia (pyproject.toml)
 mdurl==0.1.2
     # via markdown-it-py
+msgpack==1.2.0
+    # via cachecontrol
 numpy==2.4.6
     # via pgvector
+packageurl-python==0.17.6
+    # via cyclonedx-python-lib
 packaging==24.2
     # via
     #   langfuse
+    #   pip-audit
+    #   pip-requirements-parser
     #   procrastinate
     #   pytest
 pgvector==0.4.2
     # via sia (pyproject.toml)
+pip==26.1.2
+    # via pip-api
+pip-api==0.0.34
+    # via pip-audit
+pip-audit==2.10.1
+    # via sia (pyproject.toml)
+pip-requirements-parser==32.0.1
+    # via pip-audit
+platformdirs==4.10.0
+    # via pip-audit
 pluggy==1.6.0
     # via pytest
 procrastinate==3.8.1
@@ -152,6 +182,8 @@ psycopg-binary==3.3.4
     # via psycopg
 psycopg-pool==3.3.1
     # via psycopg
+py-serializable==2.1.0
+    # via cyclonedx-python-lib
 pyasn1==0.6.3
     # via
     #   python-jose
@@ -178,6 +210,8 @@ pygments==2.20.0
     #   rich
 pyjwt==2.13.0
     # via mcp
+pyparsing==3.3.2
+    # via pip-requirements-parser
 pytest==9.0.3
     # via
     #   sia (pyproject.toml)
@@ -203,7 +237,9 @@ python-multipart==0.0.32
 pytz==2026.2
     # via dateparser
 pyyaml==6.0.3
-    # via uvicorn
+    # via
+    #   bandit
+    #   uvicorn
 referencing==0.37.0
     # via
     #   jsonschema
@@ -211,9 +247,15 @@ referencing==0.37.0
 regex==2026.5.9
     # via dateparser
 requests==2.34.2
-    # via langfuse
+    # via
+    #   cachecontrol
+    #   langfuse
+    #   pip-audit
 rich==15.0.0
-    # via import-linter
+    # via
+    #   bandit
+    #   import-linter
+    #   pip-audit
 rpds-py==2026.5.1
     # via
     #   jsonschema
@@ -228,6 +270,8 @@ six==1.17.0
     #   python-dateutil
 sniffio==1.3.1
     # via anthropic
+sortedcontainers==2.4.0
+    # via cyclonedx-python-lib
 sqlalchemy==2.0.50
     # via
     #   sia (pyproject.toml)
@@ -239,8 +283,14 @@ starlette==1.3.1
     #   fastapi
     #   mcp
     #   sse-starlette
+stevedore==5.8.0
+    # via bandit
 tld==0.13.2
     # via courlan
+tomli==2.4.1
+    # via pip-audit
+tomli-w==1.2.0
+    # via pip-audit
 trafilatura==2.1.0
     # via sia (pyproject.toml)
 typing-extensions==4.15.0
@@ -248,6 +298,7 @@ typing-extensions==4.15.0
     #   alembic
     #   anthropic
     #   anyio
+    #   cyclonedx-python-lib
     #   fastapi
     #   grimp
     #   import-linter

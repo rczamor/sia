@@ -160,6 +160,7 @@ class GraphService:
         if not refs:
             return []
         predicate_filter = "AND e.predicate = ANY(:predicates)" if predicates else ""
+        # B608: predicate_filter is one of two fixed literals; values are bound.
         sql = text(
             f"""
             WITH RECURSIVE frontier AS (
@@ -177,7 +178,7 @@ class GraphService:
                 {predicate_filter}
             )
             SELECT DISTINCT subject_ref, predicate, object_ref, weight, hop FROM frontier
-            """
+            """  # nosec B608
         )
         params: dict[str, Any] = {"refs": refs, "depth": depth}
         if predicates:

@@ -52,7 +52,8 @@ async def main() -> int:
                     print(f"  {table}: does not exist, skipping")
                     archive[table] = []
                     continue
-                rows = await conn.execute(text(f"SELECT * FROM {table}"))  # noqa: S608 — fixed table list
+                # B608: table iterates the hardcoded TABLES tuple, not user input
+                rows = await conn.execute(text(f"SELECT * FROM {table}"))  # nosec B608
                 archive[table] = [
                     {k: _serialize(v) for k, v in row.items()} for row in rows.mappings()
                 ]

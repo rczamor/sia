@@ -41,6 +41,9 @@ dev = [
     # used by migration 003 (procrastinate schema) and the conftest preflight;
     # also pulled transitively by procrastinate, but declared here to be explicit
     "psycopg[binary]>=3.1",
+    # security tooling pinned through the lock so CI gates are reproducible
+    "pip-audit>=2.7",
+    "bandit>=1.8",
 ]
 
 [build-system]
@@ -58,6 +61,11 @@ app = ["templates/**/*", "static/**/*"]
 [tool.ruff]
 target-version = "py312"
 line-length = 100
+
+[tool.bandit]
+# Tests use asserts and ad-hoc SQL by design; app/ and scripts/ are the gated
+# surface. Remaining findings are suppressed inline with a justifying comment.
+exclude_dirs = ["tests", ".venv"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

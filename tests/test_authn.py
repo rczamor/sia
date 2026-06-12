@@ -169,26 +169,57 @@ async def test_key_hashes_only_in_database(client, db_session):
     assert principal and principal.id == "agent-hashcheck"
 
 
-async def test_force_https_sets_secure_cookie_and_hsts(anon_client, monkeypatch):
-    """Behind a TLS proxy uvicorn may see plain http; FORCE_HTTPS must still mark
-    the session cookie Secure and emit HSTS."""
-    from app.config import settings
-
-    monkeypatch.setattr(settings, "force_https", True)
-    response = await anon_client.post(
+async def test_secure_cookie_and_hsts_by_default(http_anon_client):
+    """Production posture by default: even when uvicorn sees plain http (TLS proxy
+    not forwarding the scheme), the session cookie is Secure and HSTS is sent."""
+    response = await http_anon_client.post(
         "/login", data={"email": "admin@test.local", "password": "test-password"}
     )
     assert response.status_code == 303
-    assert "Secure" in response.headers["set-cookie"]
+    set_cookie = response.headers["set-cookie"]
+    assert "Secure" in set_cookie
+    assert "HttpOnly" in set_cookie
+    assert "SameSite=lax" in set_cookie
     assert "strict-transport-security" in response.headers
+    assert "max-age=63072000" in response.headers["strict-transport-security"]
 
 
-async def test_plain_http_dev_omits_secure_and_hsts(anon_client):
-    """Local-dev over http must stay usable: no Secure flag (the browser would drop
-    the cookie) and no HSTS."""
-    response = await anon_client.post(
+async def test_forwarded_proto_login_still_secure(http_anon_client):
+    """An internal http request carrying X-Forwarded-Proto: https (proxy headers
+    not trusted by uvicorn, so the scheme stays http) still gets a Secure cookie —
+    cookie security must not depend on header plumbing."""
+    response = await http_anon_client.post(
+        "/login",
+        data={"email": "admin@test.local", "password": "test-password"},
+        headers={"X-Forwarded-Proto": "https"},
+    )
+    assert response.status_code == 303
+    assert "Secure" in response.headers["set-cookie"]
+
+
+async def test_local_dev_can_disable_secure_and_hsts(http_anon_client, monkeypatch):
+    """The plain-http override is deliberate and works: no Secure flag (a non-
+    localhost http browser would drop the cookie) and no HSTS."""
+    from app.config import settings
+
+    monkeypatch.setattr(settings, "session_cookie_secure", False)
+    monkeypatch.setattr(settings, "hsts_enabled", False)
+    response = await http_anon_client.post(
         "/login", data={"email": "admin@test.local", "password": "test-password"}
     )
     assert response.status_code == 303
     assert "Secure" not in response.headers["set-cookie"]
     assert "strict-transport-security" not in response.headers
+
+
+async def test_logout_deletes_cookie_with_matching_flags(client):
+    """The expiring Set-Cookie must carry the same attributes as the one set at
+    login, so deletion targets the identical cookie in every browser."""
+    response = await client.get("/logout")
+    assert response.status_code == 303
+    set_cookie = response.headers["set-cookie"]
+    assert 'sia_session=""' in set_cookie or "sia_session=;" in set_cookie
+    assert "HttpOnly" in set_cookie
+    assert "SameSite=lax" in set_cookie
+    assert "Secure" in set_cookie  # matches session_cookie_secure default
+    assert "Max-Age=0" in set_cookie or "expires=" in set_cookie.lower()

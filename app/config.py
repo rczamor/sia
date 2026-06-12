@@ -36,12 +36,23 @@ class Settings(BaseSettings):
     # (self-only; all frontend assets are vendored under app/static/vendor/).
     csp_header: str = ""
 
-    # Set true when the deployment is served over HTTPS (i.e. behind a TLS proxy):
-    # forces the Secure flag on the session cookie and always sends HSTS, even when
-    # proxy headers are not wired through to uvicorn. Without it, Secure/HSTS are
-    # emitted only when the request scheme is already https (direct TLS, or
-    # --proxy-headers with a trusted proxy IP).
-    force_https: bool = False
+    # Canonical external URL of this deployment (e.g. https://sia.example.com).
+    # Informational: referenced by connector guides and operational docs.
+    public_base_url: str = ""
+
+    # Session-cookie / HSTS posture. Production-safe by default: the session
+    # cookie always carries Secure and HSTS is always sent, so a proxy that
+    # doesn't forward X-Forwarded-Proto can't silently downgrade the admin
+    # session. Browsers treat http://localhost as a secure context, so local
+    # dev on localhost still works; for plain http on any other host disable
+    # these deliberately (SESSION_COOKIE_SECURE=false, HSTS_ENABLED=false).
+    session_cookie_secure: bool = True
+    hsts_enabled: bool = True
+    hsts_max_age: int = 63072000  # two years, per hstspreload.org guidance
+
+    # Peer IPs trusted for X-Forwarded-* headers. docker-entrypoint.sh exports
+    # this as uvicorn's FORWARDED_ALLOW_IPS when that isn't set explicitly.
+    trusted_proxy_ips: str = ""
 
     # Context store (git-backed Markdown files)
     context_store_path: str = "/srv/sia/context"

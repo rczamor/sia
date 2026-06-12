@@ -96,3 +96,25 @@ async def test_vendored_assets_are_served(client):
     for asset in ("vendor/pico.min.css", "vendor/htmx.min.js", "vendor/cytoscape.min.js"):
         response = await client.get(f"/static/{asset}")
         assert response.status_code == 200, asset
+
+
+async def test_rendered_admin_pages_load_no_cdn(client):
+    """Rendered output (not just template source) must reference no CDN origin."""
+    for page in ("/admin/dashboard", "/admin/graph", "/login"):
+        response = await client.get(page)
+        assert response.status_code == 200, page
+        for origin in ("https://cdn.jsdelivr.net", "https://unpkg.com"):
+            assert origin not in response.text, f"{page} references {origin}"
+
+
+def test_vendored_assets_match_pinned_hashes():
+    """No silent vendor-asset upgrades: every file matches the manifest pin."""
+    import sys
+    from pathlib import Path
+
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
+    try:
+        from verify_vendor_assets import verify
+    finally:
+        sys.path.pop(0)
+    assert verify() == []

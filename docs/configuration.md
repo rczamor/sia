@@ -24,8 +24,12 @@ secrets**.
 | `SLACK_ALERT_WEBHOOK_URL` | no | — | Outbound failure/zero-work alerts |
 | `CORS_ORIGINS` | no | (none) | Browser origins allowed to call the API |
 | `CSP_HEADER` | no | built-in | Override the admin Content-Security-Policy (default is `default-src 'self'`; all assets are vendored) |
-| `FORCE_HTTPS` | production | false | Set `true` behind a TLS proxy: forces the Secure cookie flag and HSTS even if proxy headers aren't wired through |
-| `FORWARDED_ALLOW_IPS` | no | 127.0.0.1 | IPs uvicorn trusts for `X-Forwarded-Proto/For` (set to your TLS proxy's address) |
+| `PUBLIC_BASE_URL` | no | — | Canonical external URL (e.g. `https://sia.example.com`); referenced by connector guides |
+| `SESSION_COOKIE_SECURE` | no | **true** | Secure flag on the session cookie. Disable only for plain-http dev on a non-localhost host |
+| `HSTS_ENABLED` | no | **true** | Send `Strict-Transport-Security`. Disable only for plain-http dev |
+| `HSTS_MAX_AGE` | no | 63072000 | HSTS max-age in seconds (two years) |
+| `TRUSTED_PROXY_IPS` | no | — | Peer IPs trusted for `X-Forwarded-*`; exported to uvicorn as `FORWARDED_ALLOW_IPS` by the entrypoint |
+| `FORWARDED_ALLOW_IPS` | no | 127.0.0.1 | uvicorn-native override of the same trust list (takes precedence) |
 | `JWT_EXPIRY_HOURS` | no | 24 | Session lifetime |
 | `SIA_SKIP_MIGRATE` | no | 0 | Set by the worker container so only the engine runs migrations |
 

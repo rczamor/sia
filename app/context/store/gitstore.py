@@ -14,7 +14,9 @@ import asyncio
 import fcntl
 import logging
 import os
-import subprocess
+# B404: subprocess is how the store drives git; every call goes through _git()
+# below — list args, no shell, fixed executable.
+import subprocess  # nosec B404
 import tempfile
 from contextlib import contextmanager
 from pathlib import Path
@@ -86,7 +88,10 @@ class GitContextStore:
         check: bool = True,
         return_result: bool = False,
     ):
-        result = subprocess.run(
+        # B603/B607: list args (no shell), fixed "git" executable resolved from
+        # PATH inside our container; path arguments are store-relative and
+        # validated by callers (no untrusted strings reach argv).
+        result = subprocess.run(  # nosec B603 B607
             # Self-contained repo behavior regardless of host/global git config:
             # no commit signing, no template hooks.
             ["git", "-c", "commit.gpgsign=false", "-c", "core.hooksPath=", *args],

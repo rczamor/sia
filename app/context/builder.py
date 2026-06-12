@@ -226,6 +226,7 @@ class ContextBuilder:
     async def _rank_sections(self, goal_vector, principal: Principal, pillar_hint):
         visibilities = list(principal.allowed_visibilities)
         pillar_clause = "AND (pillar = :pillar OR pillar IS NULL)" if pillar_hint else ""
+        # B608: pillar_clause is one of two fixed literals; values are bound.
         sql = text(
             f"""
             SELECT path, 1 - (embedding <=> CAST(:vec AS vector)) AS similarity
@@ -236,7 +237,7 @@ class ContextBuilder:
               {pillar_clause}
             ORDER BY embedding <=> CAST(:vec AS vector)
             LIMIT 50
-            """
+            """  # nosec B608
         )
         params: dict[str, Any] = {
             "vec": str([float(v) for v in goal_vector]),
