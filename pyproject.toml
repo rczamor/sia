@@ -17,10 +17,11 @@ dependencies = [
     "jinja2>=3.1.4",
     "python-multipart>=0.0.18",
     "python-jose[cryptography]>=3.3.0",
-    "passlib[bcrypt]>=1.7.4",
+    "bcrypt>=4.1.0",
     "trafilatura>=2.0.0",
     "procrastinate>=2.15.0",
     "langfuse>=2.60.0,<3",
+    "mcp>=1.9.0",
 ]
 
 [project.entry-points."sia.plugins"]
@@ -64,34 +65,34 @@ root_package = "app"
 name = "data layer imports nothing above it"
 type = "forbidden"
 source_modules = ["app.data"]
-forbidden_modules = ["app.retrieval", "app.runtime", "app.jobs", "app.api", "app.ui", "app.main"]
+forbidden_modules = ["app.retrieval", "app.runtime", "app.jobs", "app.gateway", "app.api", "app.ui", "app.main"]
 
 [[tool.importlinter.contracts]]
 name = "retrieval layer imports nothing above it"
 type = "forbidden"
 source_modules = ["app.retrieval"]
-forbidden_modules = ["app.context", "app.runtime", "app.jobs", "app.api", "app.ui", "app.main"]
+forbidden_modules = ["app.context", "app.runtime", "app.jobs", "app.gateway", "app.api", "app.ui", "app.main"]
 
 [[tool.importlinter.contracts]]
 name = "context layer imports nothing above it"
 type = "forbidden"
 source_modules = ["app.context"]
-forbidden_modules = ["app.runtime", "app.jobs", "app.api", "app.ui", "app.main"]
+forbidden_modules = ["app.runtime", "app.jobs", "app.gateway", "app.api", "app.ui", "app.main"]
 
 [[tool.importlinter.contracts]]
 name = "runtime composition root is below interface layers"
 type = "forbidden"
 source_modules = ["app.runtime"]
-forbidden_modules = ["app.jobs", "app.api", "app.ui", "app.main"]
+forbidden_modules = ["app.jobs", "app.gateway", "app.api", "app.ui", "app.main"]
 
 [[tool.importlinter.contracts]]
 name = "models are the bottom layer"
 type = "forbidden"
 source_modules = ["app.models"]
-forbidden_modules = ["app.data", "app.retrieval", "app.runtime", "app.jobs", "app.api", "app.ui", "app.providers", "app.plugins"]
+forbidden_modules = ["app.data", "app.retrieval", "app.runtime", "app.jobs", "app.gateway", "app.api", "app.ui", "app.providers", "app.plugins"]
 
 [[tool.importlinter.contracts]]
 name = "providers and plugins are infrastructure only"
 type = "forbidden"
 source_modules = ["app.providers", "app.plugins"]
-forbidden_modules = ["app.data", "app.retrieval", "app.runtime", "app.jobs", "app.api", "app.ui", "app.main"]
+forbidden_modules = ["app.data", "app.retrieval", "app.runtime", "app.jobs", "app.gateway", "app.api", "app.ui", "app.main"]

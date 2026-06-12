@@ -1,18 +1,19 @@
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, HTTPException
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from fastapi import APIRouter, Form, HTTPException, Request
+from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.templating import Jinja2Templates
+import bcrypt
 from jose import JWTError, jwt
-from passlib.context import CryptContext
 
 from app.config import settings
 from app.models.schemas import LoginRequest, TokenResponse
 
-router = APIRouter(prefix="/api/auth", tags=["auth"])
-security = HTTPBearer(auto_error=False)
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+router = APIRouter(tags=["auth"])
+templates = Jinja2Templates(directory="templates")
 
 ALGORITHM = "HS256"
+SESSION_COOKIE = "sia_session"
 
 
 def create_token(email: str) -> str:
@@ -31,21 +32,62 @@ def verify_token(token: str) -> str:
         raise HTTPException(status_code=401, detail="Invalid or expired token")
 
 
-async def get_current_user(
-    credentials: HTTPAuthorizationCredentials | None = Depends(security),
-) -> str:
-    if not credentials:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-    return verify_token(credentials.credentials)
+def verify_token_optional(token: str) -> str | None:
+    """Like verify_token but returns None instead of raising (middleware use)."""
+    if not token:
+        return None
+    try:
+        payload = jwt.decode(token, settings.jwt_secret, algorithms=[ALGORITHM])
+        return payload.get("sub") or None
+    except JWTError:
+        return None
 
 
-@router.post("/login", response_model=TokenResponse)
-async def login(request: LoginRequest):
-    if request.email != settings.admin_email:
-        raise HTTPException(status_code=401, detail="Invalid credentials")
+def _check_credentials(email: str, password: str) -> bool:
+    if email != settings.admin_email or not settings.admin_password_hash:
+        return False
+    try:
+        return bcrypt.checkpw(
+            password.encode()[:72], settings.admin_password_hash.encode()
+        )
+    except ValueError:
+        return False
+
+
+@router.post("/api/auth/login", response_model=TokenResponse)
+async def login_api(request: LoginRequest):
+    """Programmatic login: returns a bearer JWT."""
     if not settings.admin_password_hash:
         raise HTTPException(status_code=500, detail="Admin password not configured")
-    if not pwd_context.verify(request.password, settings.admin_password_hash):
+    if not _check_credentials(request.email, request.password):
         raise HTTPException(status_code=401, detail="Invalid credentials")
-    token = create_token(request.email)
-    return TokenResponse(access_token=token)
+    return TokenResponse(access_token=create_token(request.email))
+
+
+@router.get("/login", response_class=HTMLResponse)
+async def login_page(request: Request, error: str = ""):
+    return templates.TemplateResponse(request, "login.html", {"error": error})
+
+
+@router.post("/login")
+async def login_form(request: Request, email: str = Form(...), password: str = Form(...)):
+    """Browser login: sets the HttpOnly session cookie and redirects to the admin."""
+    if not _check_credentials(email, password):
+        return RedirectResponse("/login?error=Invalid+credentials", status_code=303)
+    response = RedirectResponse("/admin", status_code=303)
+    response.set_cookie(
+        SESSION_COOKIE,
+        create_token(email),
+        httponly=True,
+        samesite="lax",
+        secure=request.url.scheme == "https",
+        max_age=settings.jwt_expiry_hours * 3600,
+    )
+    return response
+
+
+@router.get("/logout")
+async def logout():
+    response = RedirectResponse("/login", status_code=303)
+    response.delete_cookie(SESSION_COOKIE)
+    return response

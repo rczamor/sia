@@ -13,6 +13,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.context.builder import ContextBuilder
 from app.context.consolidation.deep import DeepClock
 from app.context.consolidation.light import LightClock
 from app.context.consolidation.rem import RemClock
@@ -107,6 +108,11 @@ class Runtime:
 
     def indexer(self, db: AsyncSession) -> StoreIndexer:
         return StoreIndexer(db, self.context_store, self.embedder)
+
+    def context_builder(self, db: AsyncSession) -> ContextBuilder:
+        return ContextBuilder(
+            db, self.context_store, self.embedder, search_service=self.search_service(db)
+        )
 
     def review_service(self, db: AsyncSession) -> ReviewService:
         return ReviewService(db, self.context_store, self.embedder)

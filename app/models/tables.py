@@ -174,6 +174,8 @@ class ProcessLineage(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     operation_type: Mapped[str] = mapped_column(String(50), nullable=False)
+    build_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    principal_id: Mapped[str | None] = mapped_column(String(100))
     input_content_ids: Mapped[list[uuid.UUID]] = mapped_column(
         ARRAY(UUID(as_uuid=True)), default=list
     )
@@ -302,6 +304,57 @@ class ContextEdges(Base):
         Index("ix_context_edges_subject", "subject_ref", "predicate"),
         Index("ix_context_edges_object", "object_ref", "predicate"),
         Index("ix_context_edges_unique", "subject_ref", "predicate", "object_ref", unique=True),
+    )
+
+
+class Principals(Base):
+    """Who may consume context: owner, per-purpose agents, anonymous visitors.
+    API keys are stored as sha256 hashes only."""
+
+    __tablename__ = "principals"
+
+    id: Mapped[str] = mapped_column(String(100), primary_key=True)
+    display_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    kind: Mapped[str] = mapped_column(String(20), nullable=False)
+    token_budget: Mapped[int] = mapped_column(Integer, default=8000)
+    allowed_visibilities: Mapped[list[str]] = mapped_column(ARRAY(String), default=lambda: ["public"])
+    allow_fallback: Mapped[bool] = mapped_column(Boolean, default=False)
+    api_key_hash: Mapped[str | None] = mapped_column(String(64))
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    __table_args__ = (
+        Index("ix_principals_key", "api_key_hash"),
+    )
+
+
+class ContextBuilds(Base):
+    """Audit row for every context build — who asked, what was served, how it scored."""
+
+    __tablename__ = "context_builds"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    principal_id: Mapped[str] = mapped_column(String(100), nullable=False)
+    goal: Mapped[str] = mapped_column(Text, nullable=False)
+    pillar_hint: Mapped[str | None] = mapped_column(String(50))
+    budget_tokens: Mapped[int] = mapped_column(Integer, nullable=False)
+    served: Mapped[list] = mapped_column(JSONB, default=list)
+    skills_served: Mapped[list] = mapped_column(JSONB, default=list)
+    fallback_used: Mapped[bool] = mapped_column(Boolean, default=False)
+    coverage: Mapped[float | None] = mapped_column(Float)
+    context_score: Mapped[float | None] = mapped_column(Float)
+    artifact_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    duration_ms: Mapped[int | None] = mapped_column(Integer)
+    flags: Mapped[dict] = mapped_column(JSONB, default=dict)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+    __table_args__ = (
+        Index("ix_context_builds_principal", "principal_id", "created_at"),
     )
 
 

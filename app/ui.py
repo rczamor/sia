@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import func, select
@@ -93,3 +93,40 @@ async def review_page(request: Request, db: AsyncSession = Depends(get_db)):
 @router.get("/admin/graph", response_class=HTMLResponse)
 async def graph_page(request: Request):
     return templates.TemplateResponse(request, "graph.html", {})
+
+
+@router.get("/admin/inspector", response_class=HTMLResponse)
+async def inspector_page(request: Request, db: AsyncSession = Depends(get_db)):
+    from app.context.principals import PrincipalService
+
+    principals = await PrincipalService(db).list_all()
+    return templates.TemplateResponse(
+        request, "inspector.html", {"principals": [p for p in principals if p["enabled"]]}
+    )
+
+
+@router.post("/admin/inspector/run", response_class=HTMLResponse)
+async def inspector_run(
+    request: Request,
+    goal: str = Form(...),
+    principal_id: str = Form("owner"),
+    budget_tokens: str = Form(""),
+    db: AsyncSession = Depends(get_db),
+):
+    from app.context.principals import PrincipalService
+
+    principal = await PrincipalService(db).get(principal_id)
+    if principal is None:
+        return HTMLResponse("<p>Unknown principal</p>", status_code=400)
+    runtime = await get_runtime()
+    builder = runtime.context_builder(db)
+    artifact = await builder.build(
+        goal=goal,
+        principal=principal,
+        budget_tokens=int(budget_tokens) if budget_tokens.strip() else None,
+    )
+    return templates.TemplateResponse(
+        request,
+        "partials/artifact.html",
+        {"artifact": artifact, "markdown": artifact.to_markdown()},
+    )

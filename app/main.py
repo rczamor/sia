@@ -10,8 +10,11 @@ from app.api.context import router as context_router
 from app.api.ingest import router as ingest_router
 from app.api.knowledge import router as knowledge_router
 from app.auth import router as auth_router
-from app.database import engine
 from app.context.store.layout import scaffold_store
+from app.database import engine
+from app.gateway.api import router as gateway_router
+from app.gateway.authn import AuthMiddleware
+from app.gateway.mcp import build_mcp_asgi_app, mcp_server
 from app.jobs.queue import job_queue
 from app.runtime import get_runtime, shutdown_runtime
 from app.ui import router as ui_router
@@ -22,13 +25,15 @@ async def lifespan(app: FastAPI):
     runtime = await get_runtime()  # discover + initialize enabled plugins
     await scaffold_store(runtime.context_store)  # idempotent store layout
     async with job_queue.open_async():  # web process defers jobs; workers run them
-        yield
+        async with mcp_server.session_manager.run():  # streamable HTTP sessions
+            yield
     await shutdown_runtime()
     await engine.dispose()
 
 
 app = FastAPI(title="Sia — Context Engine", version="0.1.0", lifespan=lifespan)
 
+app.add_middleware(AuthMiddleware)  # deny-by-default: see app/gateway/authn.py
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -47,8 +52,13 @@ app.include_router(knowledge_router)
 app.include_router(context_router)
 app.include_router(config_router)
 
+app.include_router(gateway_router)
+
 # Admin UI routes
 app.include_router(ui_router)
+
+# MCP connector (own key auth inside the mount)
+app.mount("/mcp", build_mcp_asgi_app())
 
 
 @app.get("/api/health")
