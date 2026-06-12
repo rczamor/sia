@@ -40,11 +40,21 @@ async def wait_for_database(engine, timeout: int) -> None:
             print("database reachable:        yes")
             return
         except (OperationalError, OSError) as exc:
+            # Transient: server not accepting connections yet / network — retry.
             last_error = exc
             await asyncio.sleep(1)
+        except Exception as exc:
+            # Auth failure, missing database, malformed URL: waiting won't fix it,
+            # so fail immediately with a clean message. Report only the exception
+            # type (asyncpg/SQLAlchemy keep the password out of these, but the type
+            # alone is leak-proof and points at the right knob).
+            fail(
+                f"could not connect to the database ({type(exc).__name__}). Check "
+                "DATABASE_URL — credentials, host, and database name."
+            )
     fail(
-        f"database not reachable after {timeout}s ({last_error}). Check DATABASE_URL "
-        "and that Postgres is running."
+        f"database not reachable after {timeout}s ({type(last_error).__name__}). "
+        "Check DATABASE_URL and that Postgres is running."
     )
 
 

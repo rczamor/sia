@@ -101,8 +101,12 @@ jobs:
         # The admin UI must execute no third-party-hosted code; assets are
         # vendored (see docs/supply-chain.md). Tests also assert the CSP.
         run: |
+          paths="app/templates app/static/js app/gateway/authn.py"
+          for p in $paths; do
+            test -e "$p" || { echo "::error::scan path $p missing"; exit 1; }
+          done
           if grep -RInE 'https?://(cdn\.jsdelivr\.net|unpkg\.com|cdnjs\.cloudflare\.com)' \
-              app/templates app/static/js app/gateway/authn.py; then
+              $paths; then
             echo "::error::CDN reference found — vendor the asset instead"; exit 1
           fi
 
