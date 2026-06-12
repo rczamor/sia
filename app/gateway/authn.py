@@ -35,7 +35,10 @@ PUBLIC_PREFIXES = (
     "/mcp",  # enforces its own key auth
     "/api/ingest/slack",  # enforces its own webhook token
 )
-VISITOR_PREFIXES = ("/api/context/build",)
+# Exact paths the anonymous visitor principal may reach. Matched exactly (not by
+# prefix) so sibling routes like /api/context/builds — the per-principal audit
+# endpoints — are NOT swept in and require real authentication.
+VISITOR_PATHS = ("/api/context/build",)
 OWNER_PREFIXES = (
     "/admin",
     "/api/config",
@@ -111,7 +114,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
 
         principal = await _resolve_principal(request)
 
-        if principal is None and path.startswith(VISITOR_PREFIXES):
+        if principal is None and path in VISITOR_PATHS:
             if not visitor_limiter.allow(_client_ip(request)):
                 return JSONResponse({"detail": "Rate limit exceeded"}, status_code=429)
             from app.database import async_session

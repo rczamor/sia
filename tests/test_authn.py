@@ -16,7 +16,7 @@ async def test_public_paths_are_reachable(anon_client):
 
 async def test_deny_by_default_sweep(anon_client):
     """Every registered route must refuse anonymous access unless explicitly public."""
-    from app.gateway.authn import PUBLIC_PREFIXES, VISITOR_PREFIXES
+    from app.gateway.authn import PUBLIC_PREFIXES, VISITOR_PATHS
     from app.main import app
 
     failures = []
@@ -25,13 +25,21 @@ async def test_deny_by_default_sweep(anon_client):
         methods = getattr(route, "methods", None) or set()
         if not path or "{" in path:
             continue
-        if path.startswith(PUBLIC_PREFIXES + VISITOR_PREFIXES) or path == "/":
+        if path.startswith(PUBLIC_PREFIXES) or path in VISITOR_PATHS or path == "/":
             continue
         method = "GET" if "GET" in methods else next(iter(methods), "GET")
         response = await anon_client.request(method, path)
         if response.status_code not in (401, 303, 405):
             failures.append(f"{method} {path} -> {response.status_code}")
     assert not failures, "Routes reachable without auth:\n" + "\n".join(failures)
+
+
+async def test_build_audit_endpoints_require_auth(anon_client):
+    """/api/context/builds must NOT be swept in by the visitor prefix for
+    /api/context/build (the cross-anonymous build-audit leak)."""
+    for path in ("/api/context/builds", "/api/context/builds/00000000-0000-0000-0000-000000000000"):
+        response = await anon_client.get(path)
+        assert response.status_code == 401, f"{path} reachable anonymously: {response.status_code}"
 
 
 async def test_admin_redirects_anonymous_to_login(anon_client):

@@ -59,6 +59,31 @@ async def test_branch_commit_does_not_touch_main(store):
     assert "+# Pending" in diff
 
 
+async def test_merge_conflict_aborts_and_leaves_clean_tree(store):
+    """A conflicting review merge must not leave the store in a half-merged state."""
+    import pytest
+
+    from app.context.store.gitstore import StoreError
+
+    # main and the branch both edit the same file differently → conflict on merge
+    await store.commit({"knowledge/context_layers/c.md": "# main version\n"}, "main edit")
+    await store.commit(
+        {"knowledge/context_layers/c.md": "# branch version\n"},
+        "branch edit",
+        branch="consolidation/2026-06-12",
+    )
+    await store.commit({"knowledge/context_layers/c.md": "# main moved on\n"}, "main moves")
+
+    with pytest.raises(StoreError):
+        await store.merge_branch("consolidation/2026-06-12")
+
+    # store is usable afterward: no conflict markers, reads/commits still work
+    content = await store.read("knowledge/context_layers/c.md")
+    assert "<<<<<<<" not in content
+    sha = await store.commit({"knowledge/context_layers/d.md": "# ok\n"}, "post-conflict commit")
+    assert len(sha) == 40
+
+
 async def test_merge_review_branch(store):
     await store.commit(
         {"knowledge/context_layers/approved.md": "# Approved\n"},

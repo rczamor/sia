@@ -19,12 +19,19 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.tables import AiConfig
 from app.providers.base import EmbeddingProvider
 
-# Table name -> SQL fragments for display columns. Names are hardcoded here and are
-# the only non-parameterized strings in the query.
+# Table name -> SQL fragments for display columns and an always-applied safety
+# filter. Names/fragments are hardcoded here and are the only non-parameterized
+# strings in the query. `safety` excludes quarantined (prompt-injection-flagged)
+# rows so the served retrieval path honors the same exclusion as consolidation —
+# only source_content carries the quarantined column.
 SEARCHABLE_TABLES: dict[str, dict[str, str]] = {
-    "source_content": {"title": "title", "preview": "summary"},
-    "my_thoughts": {"title": "NULL", "preview": "LEFT(content, 200)"},
-    "expertise_artifacts": {"title": "title", "preview": "LEFT(content, 200)"},
+    "source_content": {
+        "title": "title",
+        "preview": "summary",
+        "safety": "AND quarantined IS FALSE",
+    },
+    "my_thoughts": {"title": "NULL", "preview": "LEFT(content, 200)", "safety": ""},
+    "expertise_artifacts": {"title": "title", "preview": "LEFT(content, 200)", "safety": ""},
 }
 
 DEFAULT_RRF_K = 60
@@ -38,6 +45,7 @@ WITH dense AS (
            ) AS rnk
     FROM {table}
     WHERE embedding IS NOT NULL
+    {safety}
     {filters}
     ORDER BY embedding <=> CAST(:query_vec AS vector)
     LIMIT :candidates
@@ -49,6 +57,7 @@ keyword AS (
            ) AS rnk
     FROM {table}
     WHERE search_vector @@ plainto_tsquery('english', :query_text)
+    {safety}
     {filters}
     ORDER BY ts_rank_cd(search_vector, plainto_tsquery('english', :query_text)) DESC
     LIMIT :candidates
@@ -127,6 +136,7 @@ class SearchService:
                     table=table_name,
                     title=columns["title"],
                     preview=columns["preview"],
+                    safety=columns["safety"],
                     filters=filters,
                 )
             )

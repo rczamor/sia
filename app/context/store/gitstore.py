@@ -61,7 +61,13 @@ class GitContextStore:
 
     # --- internals (sync, run via to_thread) ---
 
-    def _git(self, *args: str, cwd: Path | None = None, check: bool = True) -> str:
+    def _git(
+        self,
+        *args: str,
+        cwd: Path | None = None,
+        check: bool = True,
+        return_result: bool = False,
+    ):
         result = subprocess.run(
             # Self-contained repo behavior regardless of host/global git config:
             # no commit signing, no template hooks.
@@ -81,7 +87,7 @@ class GitContextStore:
             raise StoreError(
                 f"git {' '.join(args)} failed: {result.stderr.strip() or result.stdout.strip()}"
             )
-        return result.stdout
+        return result if return_result else result.stdout
 
     @contextmanager
     def _lock(self):
@@ -192,7 +198,19 @@ class GitContextStore:
     async def merge_branch(self, branch: str) -> str:
         def _merge():
             with self._lock():
-                self._git("merge", "--no-ff", "-q", "-m", f"review: approve {branch}", branch)
+                result = self._git(
+                    "merge", "--no-ff", "-q", "-m", f"review: approve {branch}", branch,
+                    check=False, return_result=True,
+                )
+                if result.returncode != 0:
+                    # Leave the store clean: abort the half-applied merge before
+                    # surfacing the conflict, or the next read/commit sees a
+                    # conflicted working tree.
+                    self._git("merge", "--abort", check=False)
+                    raise StoreError(
+                        f"Merge of {branch} conflicts with main; resolve manually. "
+                        f"{result.stdout.strip()} {result.stderr.strip()}".strip()
+                    )
                 self._git("branch", "-D", branch)
                 return self._git("rev-parse", "HEAD").strip()
 

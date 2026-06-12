@@ -141,8 +141,10 @@ async def inspector_run(
     if principal is None:
         return HTMLResponse("<p>Unknown principal</p>", status_code=400)
     runtime = await get_runtime()
-    builder = runtime.context_builder(db)
-    artifact = await builder.build(
+    # Route through build_context so inspector builds are scored and traced like
+    # API/MCP builds (builder.build alone audits but never scores).
+    artifact = await runtime.build_context(
+        db,
         goal=goal,
         principal=principal,
         budget_tokens=int(budget_tokens) if budget_tokens.strip() else None,
