@@ -141,7 +141,17 @@ class LightClock:
                     claims=claims,
                     source_id=source.id,
                 )
-                files[document.path] = self.serializer.dumps(document)
+                # Two new-topic sources in one batch can sanitize to the same path;
+                # merge their claims instead of letting the second overwrite the
+                # first (which would silently drop the first source's evidence).
+                if document.path in files:
+                    merged = await self._append_claims(
+                        document.path, files[document.path], claims, source.id
+                    )
+                    if merged is not None:
+                        files[document.path] = merged
+                else:
+                    files[document.path] = self.serializer.dumps(document)
 
             processed_sources.append(source)
 
@@ -229,6 +239,10 @@ class LightClock:
         today = datetime.now(timezone.utc).date().isoformat()
         document.front["freshness"] = today
         document.front["last_consolidated"] = today
+        # New evidence revives a pruned (stale) topic — otherwise the appended claims
+        # land in a file the indexer and builder both exclude (a silent black hole).
+        if str(document.front.get("status", "active")) == "stale":
+            document.front["status"] = "active"
         existing_sources = [str(s) for s in document.front.get("sources") or []]
         if str(source_id) not in existing_sources:
             document.front["sources"] = existing_sources + [str(source_id)]

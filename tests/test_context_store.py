@@ -65,7 +65,10 @@ async def test_commit_rejects_path_traversal(store):
 
     from app.context.store.gitstore import StoreError
 
-    for bad in ("../../../../tmp/pwn.md", "/etc/cron.d/x", "knowledge/../../escape.md"):
+    for bad in (
+        "../../../../tmp/pwn.md", "/etc/cron.d/x", "knowledge/../../escape.md",
+        ".git/hooks/post-commit", "knowledge/../.git/config",
+    ):
         with pytest.raises(StoreError):
             await store.commit({bad: "owned"}, "attempt traversal")
     # the escape target was never written

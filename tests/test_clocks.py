@@ -70,6 +70,47 @@ async def test_light_clock_untrusted_goes_to_review_branch(db_session, store, em
     assert flag is True
 
 
+async def test_colliding_new_topic_slugs_merge_not_overwrite(db_session, store, embedder):
+    """Two new-topic sources in one batch whose slugs collide must merge claims, not
+    drop the first source's evidence."""
+    s1 = await add_source(db_session, embedder, "owner", title="Source one")
+    s2 = await add_source(db_session, embedder, "owner", title="Source two")
+    decision = {
+        "action": "new_topic", "topic_path": "",
+        "new_topic": {"slug": "context-rot", "title": "Context Rot",
+                      "pillar": "context_layers", "gist": "g"},
+        "claims": ["claim text"],
+    }
+    clock = LightClock(db_session, store, tracked(db_session, FakeLLM(decision)), embedder)
+    result = await clock.run([s1.id, s2.id])
+    assert result["files_changed"] == ["knowledge/context_layers/context-rot.md"]
+    content = await store.read("knowledge/context_layers/context-rot.md")
+    # both sources' citations are present — neither was overwritten
+    assert f"[source:{s1.id}]" in content
+    assert f"[source:{s2.id}]" in content
+
+
+async def test_append_revives_stale_topic(db_session, store, embedder):
+    """New evidence appended to a pruned (stale) topic restores it to active so it
+    isn't a write-only black hole."""
+    stale_topic = (
+        "---\nid: topic-old\npillar: context_layers\nstatus: stale\npriority: 0.2\n"
+        "visibility: private\nfreshness: 2026-01-01\nsources: []\n---\n\n"
+        "# Old\n\n## Gist\n\nOld topic.\n\n## Key claims\n\n- prior claim [source:x]\n"
+    )
+    await store.commit({"knowledge/context_layers/old.md": stale_topic}, "seed stale")
+    source = await add_source(db_session, embedder, "owner")
+    decision = {
+        "action": "append", "topic_path": "knowledge/context_layers/old.md",
+        "new_topic": {}, "claims": ["fresh evidence"],
+    }
+    clock = LightClock(db_session, store, tracked(db_session, FakeLLM(decision)), embedder)
+    await clock.run([source.id])
+    content = await store.read("knowledge/context_layers/old.md")
+    assert "status: active" in content
+    assert "fresh evidence" in content
+
+
 async def test_untrusted_source_not_reprocessed_by_sweep(db_session, store, embedder):
     """An untrusted source written to a review branch must be marked consolidated so
     a second light run (the hourly sweep) does not re-append duplicate claims."""

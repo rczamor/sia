@@ -44,6 +44,9 @@ def _safe_target(root: Path, rel_path: str) -> Path:
     root_resolved = root.resolve()
     if target != root_resolved and root_resolved not in target.parents:
         raise StoreError(f"store path escapes root: {rel_path!r}")
+    # never write into the repo's own metadata directory
+    if ".git" in target.relative_to(root_resolved).parts:
+        raise StoreError(f"store path targets .git: {rel_path!r}")
     return target
 
 
@@ -150,11 +153,11 @@ class GitContextStore:
             target = _safe_target(tree, rel_path)
             if content is None:
                 if target.exists():
-                    self._git("rm", "-q", rel_path, cwd=tree)
+                    self._git("rm", "-q", "--", rel_path, cwd=tree)
             else:
                 target.parent.mkdir(parents=True, exist_ok=True)
                 target.write_text(content, encoding="utf-8")
-                self._git("add", rel_path, cwd=tree)
+                self._git("add", "--", rel_path, cwd=tree)
         staged = self._git("diff", "--cached", "--name-only", cwd=tree)
         if not staged.strip():
             return self._git("rev-parse", "HEAD", cwd=tree).strip()
