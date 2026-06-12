@@ -286,5 +286,5 @@ watchfiles==1.2.0
     # via uvicorn
 websockets==16.0
     # via uvicorn
-wrapt==1.17.3
+wrapt==2.2.1
     # via langfuse
