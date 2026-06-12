@@ -41,6 +41,11 @@ OWNER_PREFIXES = (
     "/api/config",
     "/api/context/review",
     "/api/context/consolidate",
+    # admin visualizations — these read across the whole store without per-principal
+    # visibility filtering, so they must stay owner-only
+    "/api/context/graph",
+    "/api/context/health",
+    "/api/context/runs",
     "/api/principals",
     "/docs",
     "/openapi.json",

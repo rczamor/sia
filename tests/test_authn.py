@@ -123,6 +123,17 @@ async def test_agent_cannot_touch_owner_surface(client, anon_client, db_session)
     assert response.status_code == 403
 
 
+async def test_agent_cannot_read_admin_visualizations(client, anon_client, db_session):
+    """Graph/health/runs read across the whole store without per-principal visibility
+    filtering, so a public-only agent key must not reach them (would leak private
+    topic/skill/entity structure)."""
+    created = await client.post("/api/principals", json={"purpose": "snoop"})
+    api_key = created.json()["api_key"]
+    for path in ("/api/context/graph", "/api/context/health", "/api/context/runs"):
+        response = await anon_client.get(path, headers={"Authorization": f"Bearer {api_key}"})
+        assert response.status_code == 403, path
+
+
 async def test_principals_admin_is_owner_only(anon_client):
     response = await anon_client.get("/api/principals")
     assert response.status_code == 401
