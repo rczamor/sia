@@ -59,6 +59,39 @@ async def test_branch_commit_does_not_touch_main(store):
     assert "+# Pending" in diff
 
 
+async def test_commit_rejects_path_traversal(store):
+    """LLM-derived slugs/pillars must never escape the store root (CWE-22)."""
+    import pytest
+
+    from app.context.store.gitstore import StoreError
+
+    for bad in ("../../../../tmp/pwn.md", "/etc/cron.d/x", "knowledge/../../escape.md"):
+        with pytest.raises(StoreError):
+            await store.commit({bad: "owned"}, "attempt traversal")
+    # the escape target was never written
+    import os
+
+    assert not os.path.exists("/tmp/pwn.md")
+
+
+async def test_safe_slug_and_pillar_sanitize_llm_paths():
+    from app.context.consolidation.light import new_topic_document, safe_pillar
+    from app.context.store.documents import safe_slug
+    import uuid
+
+    assert safe_slug("../../etc/passwd") == "etc-passwd"
+    assert safe_slug("../..") == "untitled"
+    assert safe_pillar("../../evil") == "context_layers"
+    assert safe_pillar("context_layers") == "context_layers"
+
+    doc = new_topic_document(
+        slug="../../../../tmp/x", title="T", pillar="../../evil",
+        gist="g", claims=["c"], source_id=uuid.uuid4(),
+    )
+    assert ".." not in doc.path
+    assert doc.path.startswith("knowledge/context_layers/")
+
+
 async def test_merge_conflict_aborts_and_leaves_clean_tree(store):
     """A conflicting review merge must not leave the store in a half-merged state."""
     import pytest

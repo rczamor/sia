@@ -7,6 +7,7 @@ used for *rendered surfaces* (artifacts, dashboards, review diffs), never storag
 The serializer is a seam: an alternative StoreSerializer can be plugged in.
 """
 
+import re
 from dataclasses import dataclass, field
 from typing import Any, Protocol, runtime_checkable
 
@@ -84,3 +85,10 @@ class MarkdownSerializer:
 
 def estimate_tokens(text: str) -> int:
     return max(1, len(text) // 4)
+
+
+def safe_slug(value: str, fallback: str = "untitled") -> str:
+    """Reduce an LLM-proposed slug/pillar to a filesystem-safe token ([a-z0-9-]),
+    so it can never introduce path traversal when used to build a store path."""
+    cleaned = re.sub(r"[^a-z0-9]+", "-", (value or "").lower()).strip("-")
+    return cleaned[:80] or fallback

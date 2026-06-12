@@ -32,6 +32,21 @@ class StoreError(RuntimeError):
     pass
 
 
+def _safe_target(root: Path, rel_path: str) -> Path:
+    """Resolve ``rel_path`` under ``root``, refusing any path that escapes it.
+
+    Store paths can originate from LLM output (topic slugs, skill slugs, pillars),
+    so an injected ``../../`` or absolute path must never write outside the store.
+    """
+    if rel_path.startswith("/") or "\x00" in rel_path:
+        raise StoreError(f"unsafe store path: {rel_path!r}")
+    target = (root / rel_path).resolve()
+    root_resolved = root.resolve()
+    if target != root_resolved and root_resolved not in target.parents:
+        raise StoreError(f"store path escapes root: {rel_path!r}")
+    return target
+
+
 @runtime_checkable
 class ContextStoreBackend(Protocol):
     async def read(self, path: str, ref: str = "HEAD") -> str | None: ...
@@ -113,6 +128,10 @@ class GitContextStore:
             if branch is None:
                 return self._write_and_commit(self.root, files, message)
             # Review branch: never touch the main working tree.
+            # Prune first: a prior worker crash (or a failed remove) can leave a
+            # stale .git/worktrees entry that otherwise blocks 'worktree add'
+            # ("branch already checked out") forever.
+            self._git("worktree", "prune", check=False)
             base = "main" if self._branch_exists("main") else None
             with tempfile.TemporaryDirectory(prefix="sia-worktree-") as tmp:
                 if self._branch_exists(branch):
@@ -128,7 +147,7 @@ class GitContextStore:
 
     def _write_and_commit(self, tree: Path, files: dict[str, str | None], message: str) -> str:
         for rel_path, content in files.items():
-            target = tree / rel_path
+            target = _safe_target(tree, rel_path)
             if content is None:
                 if target.exists():
                     self._git("rm", "-q", rel_path, cwd=tree)
@@ -152,8 +171,8 @@ class GitContextStore:
         def _read():
             if not (self.root / ".git").exists():
                 return None
+            target = _safe_target(self.root, path)  # refuse paths escaping the store
             if ref == "HEAD":
-                target = self.root / path
                 return target.read_text(encoding="utf-8") if target.exists() else None
             out = self._git("show", f"{ref}:{path}", check=False)
             return out or None

@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.context.consolidation.base import fail_run, finish_run, start_run
 from app.context.entities import EntityExtractor
 from app.context.index import StoreIndexer
-from app.context.store.documents import MarkdownSerializer, StoreDocument
+from app.context.store.documents import MarkdownSerializer, StoreDocument, safe_slug
 from app.context.store.gitstore import GitContextStore
 from app.data.lineage import TrackedLLMProvider
 from app.models.tables import ContextSections, ExpertiseArtifacts
@@ -218,7 +218,7 @@ class DeepClock:
 
 def skill_document(spec: dict) -> StoreDocument:
     today = datetime.now(timezone.utc).date().isoformat()
-    slug = spec["slug"]
+    slug = safe_slug(spec["slug"], fallback="skill")  # builds the store path
     steps = "\n".join(f"{i + 1}. {s}" for i, s in enumerate(spec.get("steps") or []))
     failures = "\n".join(f"- {f}" for f in spec.get("failure_modes") or [])
     body = (

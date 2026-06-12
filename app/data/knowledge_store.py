@@ -154,12 +154,12 @@ class KnowledgeStore:
             item = await self.get_item(table_name, item_id)
             if item:
                 if table_name == "source_content":
-                    t = updates.get("title", item.title)
-                    s = updates.get("summary", item.summary or "")
-                    c = updates.get("content", item.content or "")
+                    t = updates.get("title", item.title) or ""
+                    s = updates.get("summary", item.summary) or ""
+                    c = updates.get("content", item.content) or ""
                     embed_text = f"{t} {s} {c}"[:8000]
                 elif table_name == "my_thoughts":
-                    embed_text = updates.get("content", item.content)[:8000]
+                    embed_text = (updates.get("content", item.content) or "")[:8000]
                 else:
                     t = updates.get("title", item.title)
                     c = updates.get("content", item.content)

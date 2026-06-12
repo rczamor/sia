@@ -16,9 +16,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.context.consolidation.base import fail_run, finish_run, start_run
 from app.context.graph import GraphService
 from app.context.index import StoreIndexer
-from app.context.store.documents import MarkdownSerializer, StoreDocument
+from app.context.store.documents import MarkdownSerializer, StoreDocument, safe_slug
 from app.context.store.gitstore import GitContextStore
 from app.data.lineage import TrackedLLMProvider
+from app.models.enums import Pillar
 from app.models.tables import SourceContent
 from app.prompts.consolidation import LIGHT_MATCH
 from app.providers.base import EmbeddingProvider
@@ -27,12 +28,23 @@ logger = logging.getLogger(__name__)
 
 MAX_ITEMS_PER_RUN = 20
 CANDIDATE_TOPICS = 5
+KNOWN_PILLARS = {p.value for p in Pillar}
+DEFAULT_PILLAR = Pillar.CONTEXT_LAYERS.value
+
+
+def safe_pillar(pillar: str) -> str:
+    """A known pillar enum value (path-safe by construction) or the default — never
+    an arbitrary LLM string that could traverse the store path."""
+    return pillar if pillar in KNOWN_PILLARS else DEFAULT_PILLAR
 
 
 def new_topic_document(
     slug: str, title: str, pillar: str, gist: str, claims: list[str], source_id: uuid.UUID
 ) -> StoreDocument:
     today = datetime.now(timezone.utc).date().isoformat()
+    # slug and pillar build the store path — sanitize so LLM output can't traverse
+    slug = safe_slug(slug, fallback=f"untitled-{str(source_id)[:8]}")
+    pillar = safe_pillar(pillar)
     front = {
         "id": f"topic-{slug}",
         "pillar": pillar,
@@ -102,7 +114,7 @@ class LightClock:
         )
 
         files: dict[str, str] = {}
-        processed = 0
+        processed_sources = []  # marked consolidated only after a successful commit
         for source in sources:
             decision = await self._match(source)
             action = decision.get("action", "skip")
@@ -131,16 +143,22 @@ class LightClock:
                 )
                 files[document.path] = self.serializer.dumps(document)
 
-            processed += 1
-            if branch is None:
-                source.is_consolidated = True
+            processed_sources.append(source)
 
+        processed = len(processed_sources)
         if not files:
             await finish_run(self.db, run, [], f"{processed} items, no file changes")
             return {"processed": processed, "files_changed": []}
 
         message = f"light: consolidate {processed} item(s)"
         await self.store.commit(files, message, branch=branch)
+
+        # Mark consolidated AFTER the commit succeeds, on BOTH paths. An item written
+        # to a review branch must not be re-selected by the hourly sweep (which would
+        # append duplicate claims) — approve/reject govern whether the branch merges,
+        # not whether the source is reprocessed. (reject also marks them consolidated.)
+        for source in processed_sources:
+            source.is_consolidated = True
 
         if branch is None:
             # direct-to-main: re-index + refresh declared edges immediately

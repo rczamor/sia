@@ -94,11 +94,18 @@ class RemClock:
         if contradictions:
             files["tensions/contradictions.md"] = await self._render_tensions(contradictions)
 
-        # 3. Citation-use ledger: priorities follow demonstrated usefulness
+        # 3. Citation-use ledger: priorities follow demonstrated usefulness. This
+        # only mutates `files`; the builds are marked applied AFTER the commit
+        # succeeds, so a git failure doesn't consume the usage signal without
+        # persisting the priority change.
         ledger_changes = await self._apply_citation_ledger(files)
 
         if files:
             await self.store.commit(files, "rem: re-gist + tensions", branch=None)
+
+        # The priority changes are now durably committed (or there were none to
+        # write) — safe to mark the usage signals consumed.
+        await self._mark_ledger_applied()
 
         # 4. Refresh index + INDEX.md (always — freshness decay moves daily)
         await indexer.sync()
@@ -177,18 +184,23 @@ class RemClock:
             files[path] = self.serializer.dumps(document)
             changed += 1
 
-        if rows:
-            await self.db.execute(
-                sql_text(
-                    """
-                    UPDATE context_builds
-                    SET flags = flags || '{"ledger_applied": true}'::jsonb
-                    WHERE created_at > now() - interval '7 days'
-                      AND flags ? 'useful' AND NOT (flags ? 'ledger_applied')
-                    """
-                )
-            )
         return changed
+
+    async def _mark_ledger_applied(self) -> None:
+        """Mark recent flagged builds as ledger-applied. Called only after the
+        priority commit succeeds (see _consolidate)."""
+        from sqlalchemy import text as sql_text
+
+        await self.db.execute(
+            sql_text(
+                """
+                UPDATE context_builds
+                SET flags = flags || '{"ledger_applied": true}'::jsonb
+                WHERE created_at > now() - interval '7 days'
+                  AND flags ? 'useful' AND NOT (flags ? 'ledger_applied')
+                """
+            )
+        )
 
     async def _recently_changed_topics(self):
         cutoff = datetime.now(timezone.utc) - timedelta(hours=CHANGED_WINDOW_HOURS)

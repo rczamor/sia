@@ -146,7 +146,9 @@ class StoreIndexer:
             "|---|---|---|---|---|---|",
         ]
         for row in ranked:
-            if row.status == "archived":
+            # stale (pruned) and archived topics are excluded from the priority map
+            # the builder reads first — pruning must be reflected to readers
+            if row.status in ("archived", "stale"):
                 continue
             score = row.priority * freshness_decay(row.freshness, now)
             gist_one_line = " ".join((row.gist or "").split())[:140]

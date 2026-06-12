@@ -57,15 +57,33 @@ async def test_light_clock_untrusted_goes_to_review_branch(db_session, store, em
 
     assert result["branch"].startswith("consolidation/")
     assert result["files_changed"] == ["knowledge/context_layers/context-rot.md"]
-    # not on main yet, and the source is NOT consolidated until approval
+    # not on main yet — only the review branch carries it
     assert await store.read("knowledge/context_layers/context-rot.md") is None
+    # the source IS marked consolidated after the branch commit so the hourly sweep
+    # cannot re-select it and append duplicate claims; approve/reject govern the merge
     flag = (
         await db_session.execute(
             text("SELECT is_consolidated FROM source_content WHERE id = :id"),
             {"id": str(source.id)},
         )
     ).scalar()
-    assert flag is False
+    assert flag is True
+
+
+async def test_untrusted_source_not_reprocessed_by_sweep(db_session, store, embedder):
+    """An untrusted source written to a review branch must be marked consolidated so
+    a second light run (the hourly sweep) does not re-append duplicate claims."""
+    source = await add_source(db_session, embedder, "untrusted")
+    run1 = await LightClock(
+        db_session, store, tracked(db_session, FakeLLM(LIGHT_DECISION)), embedder
+    ).run([source.id])
+    assert run1["processed"] == 1
+
+    # the sweep re-runs over all unconsolidated sources — this one must be excluded
+    run2 = await LightClock(
+        db_session, store, tracked(db_session, FakeLLM(LIGHT_DECISION)), embedder
+    ).run()
+    assert run2["processed"] == 0
 
 
 async def test_light_clock_owner_tier_commits_to_main(db_session, store, embedder):
