@@ -84,9 +84,53 @@ jobs:
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version: "3.12"
-      - name: Dependency audit
-        # pip-audit itself floats deliberately: an auditor wants current advisories.
+      - name: Dependency audit (locked environment, pinned tooling)
         run: |
-          pip install pip-audit
+          pip install -c constraints.txt pip-audit
           pip install -c constraints.txt -e .
           pip-audit
+      - name: Bandit static analysis
+        # Suppressions are inline `# nosec <id>` with a justifying comment;
+        # tests are excluded via [tool.bandit] in pyproject.toml.
+        run: |
+          pip install -c constraints.txt bandit
+          bandit -c pyproject.toml -r app/ scripts/ -q
+      - name: Vendored assets match pinned hashes
+        run: python scripts/verify_vendor_assets.py
+      - name: No CDN script/style references
+        # The admin UI must execute no third-party-hosted code; assets are
+        # vendored (see docs/supply-chain.md). Tests also assert the CSP.
+        run: |
+          paths="app/templates app/static/js app/gateway/authn.py"
+          for p in $paths; do
+            test -e "$p" || { echo "::error::scan path $p missing"; exit 1; }
+          done
+          if grep -RInE 'https?://(cdn\.jsdelivr\.net|unpkg\.com|cdnjs\.cloudflare\.com)' \
+              $paths; then
+            echo "::error::CDN reference found — vendor the asset instead"; exit 1
+          fi
+
+  wheel-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.12"
+      - name: Build wheel
+        run: pip wheel --no-deps -w dist .
+      - name: Install wheel and import from outside the repo
+        # Proves the package is self-contained: templates/static (incl. vendored
+        # assets) ship in the wheel and resolve package-relative from any cwd.
+        run: |
+          pip install -c constraints.txt dist/*.whl
+          cd /tmp
+          python - <<'EOF'
+          import app.main
+          from app.templating import STATIC_DIR, TEMPLATES_DIR
+          assert (TEMPLATES_DIR / "base.html").is_file()
+          for asset in ("pico.min.css", "htmx.min.js", "cytoscape.min.js"):
+              path = STATIC_DIR / "vendor" / asset
+              assert path.is_file() and path.stat().st_size > 10_000, asset
+          print("wheel smoke OK")
+          EOF

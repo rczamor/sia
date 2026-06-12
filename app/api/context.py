@@ -59,6 +59,8 @@ async def graph_data(
     pillar_clause = "AND s.pillar = :pillar" if pillar else ""
     sections = (
         await db.execute(
+            # B608: the only interpolation is pillar_clause, a fixed literal
+            # chosen by a boolean; user values (:pillar, :limit) are bound.
             text(
                 f"""
                 SELECT s.path, s.kind, s.title, s.pillar, s.status, s.priority,
@@ -75,7 +77,7 @@ async def graph_data(
                 WHERE s.kind IN ('topic', 'skill') {pillar_clause}
                 ORDER BY s.priority DESC
                 LIMIT :limit
-                """
+                """  # nosec B608
             ),
             {"limit": limit, **({"pillar": pillar} if pillar else {})},
         )

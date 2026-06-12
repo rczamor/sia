@@ -24,29 +24,64 @@ sia.example.com {
 }
 ```
 
-Then tell Sia it's behind TLS — in `.env`:
+Sia is HTTPS-safe out of the box: the session cookie is always `Secure` and
+HSTS is always sent (`SESSION_COOKIE_SECURE` / `HSTS_ENABLED`, both default
+true) — nothing depends on whether the proxy forwards `X-Forwarded-Proto`.
+Optionally set in `.env`:
 
 ```bash
-FORCE_HTTPS=true              # Secure session cookie + HSTS, unconditionally
-FORWARDED_ALLOW_IPS=<proxy-ip>  # which peer uvicorn trusts for X-Forwarded-* headers
+PUBLIC_BASE_URL=https://sia.example.com  # canonical external URL
+TRUSTED_PROXY_IPS=<proxy-ip>   # peers uvicorn trusts for X-Forwarded-* headers
 ```
 
-`FORCE_HTTPS` is the safety net: without it, a proxy that isn't in
-`FORWARDED_ALLOW_IPS` leaves uvicorn seeing plain http, and the session cookie
-would be set without `Secure` and HSTS would never be sent.
-
-**Scope the header trust carefully.** Whoever matches `FORWARDED_ALLOW_IPS` can
-set `X-Forwarded-For` (which keys the login/visitor rate limits) and
-`X-Forwarded-Proto`. With a same-host proxy reaching the loopback-published port,
-connections arrive from the Docker bridge gateway (often `172.17.0.1`) — an
-address **shared by every process on the host**, not unique to your proxy. That
-is acceptable on a single-purpose VPS (the compose file publishes the engine on
-`127.0.0.1` only, so nothing off-host reaches it directly), but on a shared host
-run the proxy as a container on the compose network and set
-`FORWARDED_ALLOW_IPS` to that container's IP instead. `FORCE_HTTPS` keeps
-cookie/HSTS decisions independent of the spoofable scheme either way.
+**Scope the header trust carefully.** Whoever matches `TRUSTED_PROXY_IPS`
+(exported to uvicorn as `FORWARDED_ALLOW_IPS`) can set `X-Forwarded-For` —
+which keys the login/visitor rate limits — and `X-Forwarded-Proto`. With a
+same-host proxy reaching the loopback-published port, connections arrive from
+the Docker bridge gateway (often `172.17.0.1`) — an address **shared by every
+process on the host**, not unique to your proxy. That is acceptable on a
+single-purpose VPS (the compose file publishes the engine on `127.0.0.1` only,
+so nothing off-host reaches it directly), but on a shared host run the proxy
+as a container on the compose network and trust that container's IP instead.
+Cookie/HSTS decisions never depend on the spoofable scheme either way.
 
 Then connect your harnesses: see [connectors.md](connectors.md).
+
+## Database requirements & privileges
+
+Sia needs Postgres with the `vector` (pgvector) and `uuid-ossp` extensions. The
+entrypoint runs `python scripts/preflight_db.py --wait 60` before migrating; it
+reports each requirement and fails with **one** actionable error instead of a
+privilege failure mid-migration:
+
+- database reachable,
+- `vector` available on the server,
+- `vector` installed — or creatable by the app role,
+- `uuid-ossp` installed — or creatable by the app role.
+
+Migration 001 only runs `CREATE EXTENSION` when an extension isn't installed
+yet, so the app role needs **no** special privileges when the extensions are
+pre-enabled. If they aren't, install them once as a database owner/admin —
+`CREATE EXTENSION vector; CREATE EXTENSION "uuid-ossp";` — then rerun
+migrations.
+
+### Managed Postgres checklist (Neon, RDS, Cloud SQL, ...)
+
+- [ ] pgvector enabled (Neon: pre-available; RDS/Cloud SQL: supported versions)
+- [ ] Extensions installed by an admin role, or the app role may create them
+- [ ] `DATABASE_URL=postgresql+asyncpg://...` points at the database
+- [ ] `python scripts/preflight_db.py` prints `preflight OK`
+- [ ] `alembic upgrade head` (or just start the engine — the entrypoint migrates)
+
+### Local test DB checklist
+
+- [ ] Postgres running locally with the pgvector package installed
+      (`apt-get install postgresql-16-pgvector`, or the `pgvector/pgvector` image)
+- [ ] `make test-db` — creates `sia_test` and installs the extension (needs a
+      superuser; on a managed DB, point `DATABASE_URL` at a scratch database
+      with the extension pre-enabled instead)
+- [ ] `pytest` — the conftest preflight will tell you in one line if the DB or
+      extension is missing
 
 ## Continuous deployment (GitHub Actions)
 
@@ -80,8 +115,9 @@ canonical; every Postgres context table is rebuildable from the store**.
 ## Operational checklist
 
 - [ ] `JWT_SECRET` is random and not the example value
-- [ ] `FORCE_HTTPS=true` set; login response carries a `Secure` cookie and a
-      `Strict-Transport-Security` header (check the browser dev tools)
+- [ ] Login response carries a `Secure` cookie and a `Strict-Transport-Security`
+      header (check the browser dev tools); `SESSION_COOKIE_SECURE`/`HSTS_ENABLED`
+      were **not** disabled in production
 - [ ] Admin password hash set; login works; `/admin` unreachable anonymously
 - [ ] Per-consumer API keys created (never share the owner session)
 - [ ] Slack alert webhook configured (consolidation failures page you)

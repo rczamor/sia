@@ -161,7 +161,7 @@ async def client():
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(
         transport=transport,
-        base_url="http://test",
+        base_url="https://test",
         cookies={SESSION_COOKIE: create_token(settings.admin_email)},
     ) as c:
         yield c
@@ -170,6 +170,17 @@ async def client():
 @pytest.fixture
 async def anon_client():
     """Unauthenticated client — sees only public surface."""
+    from app.main import app
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="https://test") as c:
+        yield c
+
+
+@pytest.fixture
+async def http_anon_client():
+    """Unauthenticated client over plain http — exercises the path where a TLS
+    proxy exists but uvicorn still sees the internal scheme."""
     from app.main import app
 
     transport = httpx.ASGITransport(app=app)

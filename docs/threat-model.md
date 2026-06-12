@@ -43,11 +43,12 @@ rebinding between resolve and connect is not pinned; mitigate at the network lay
 - API keys: random 256-bit, sha256-at-rest, shown once, rotatable, revocable.
 - Deny-by-default middleware; owner-only surface for admin/config/review/principals;
   visitor principal is public-only with no raw-data fallback.
-- Session cookie: HttpOnly, SameSite=Lax; Secure (and HSTS) when the request is
-  https or `FORCE_HTTPS=true` — set the latter behind a TLS-terminating proxy,
-  since uvicorn only sees https itself when `--proxy-headers` is trusted via
-  `FORWARDED_ALLOW_IPS`. Cross-origin unsafe methods with a session cookie are
-  refused (CSRF defense-in-depth).
+- Session cookie: HttpOnly, SameSite=Lax, and Secure **by default**
+  (`SESSION_COOKIE_SECURE`), with HSTS always sent (`HSTS_ENABLED`) — neither
+  depends on the proxy-dependent request scheme, so a TLS proxy that doesn't
+  forward `X-Forwarded-Proto` can't silently downgrade the session. The only
+  way to weaken this is the explicit plain-http dev override. Cross-origin
+  unsafe methods with a session cookie are refused (CSRF defense-in-depth).
 - Rate limits on login and anonymous builds (in-memory, per-process — use a
   shared store before scaling out).
 

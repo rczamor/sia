@@ -79,9 +79,9 @@ async def login_form(request: Request, email: str = Form(...), password: str = F
         create_token(email),
         httponly=True,
         samesite="lax",
-        # FORCE_HTTPS covers TLS-terminating proxies that don't reach uvicorn as
-        # https (see Settings.force_https); otherwise trust the request scheme.
-        secure=settings.force_https or request.url.scheme == "https",
+        # Secure-by-default regardless of the (proxy-dependent) request scheme;
+        # see Settings.session_cookie_secure for the local-plain-http override.
+        secure=settings.session_cookie_secure,
         max_age=settings.jwt_expiry_hours * 3600,
     )
     return response
@@ -90,5 +90,12 @@ async def login_form(request: Request, email: str = Form(...), password: str = F
 @router.get("/logout")
 async def logout():
     response = RedirectResponse("/login", status_code=303)
-    response.delete_cookie(SESSION_COOKIE)
+    # Deletion attributes mirror set_cookie's so the expiring Set-Cookie targets
+    # the exact same cookie in every browser.
+    response.delete_cookie(
+        SESSION_COOKIE,
+        httponly=True,
+        samesite="lax",
+        secure=settings.session_cookie_secure,
+    )
     return response

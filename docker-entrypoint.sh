@@ -1,29 +1,17 @@
 #!/usr/bin/env bash
-# Wait for Postgres, apply migrations (engine only), then run the given command.
-# A fresh `docker compose up` works end to end: the engine migrates a blank
-# database before serving, so users never hit "relation does not exist" on first
-# boot. The worker sets SIA_SKIP_MIGRATE=1 and instead waits for the engine's
-# migration to finish, so only one process migrates (no race).
+# Preflight the database, apply migrations (engine only), then run the given
+# command. A fresh `docker compose up` works end to end: the engine verifies the
+# DB and extension privileges with one clear error if anything is off, migrates a
+# blank database before serving, and only then starts. The worker sets
+# SIA_SKIP_MIGRATE=1 and instead waits for the engine's migration to finish, so
+# only one process migrates (no race).
 set -euo pipefail
 
-python - <<'PY'
-import os, socket, sys, time
-from urllib.parse import urlparse
-
-url = os.environ.get("DATABASE_URL", "").replace("postgresql+asyncpg://", "postgresql://")
-parsed = urlparse(url)
-host, port = parsed.hostname or "localhost", parsed.port or 5432
-
-for _ in range(60):
-    try:
-        with socket.create_connection((host, port), timeout=2):
-            break
-    except OSError:
-        time.sleep(1)
-else:
-    print(f"Postgres at {host}:{port} not reachable after 60s", file=sys.stderr)
-    sys.exit(1)
-PY
+# Settings.trusted_proxy_ips is the documented knob; uvicorn reads the trust
+# list from FORWARDED_ALLOW_IPS, which still wins when set explicitly.
+if [ -n "${TRUSTED_PROXY_IPS:-}" ] && [ -z "${FORWARDED_ALLOW_IPS:-}" ]; then
+  export FORWARDED_ALLOW_IPS="$TRUSTED_PROXY_IPS"
+fi
 
 if [ "${SIA_SKIP_MIGRATE:-0}" = "1" ]; then
   echo "Waiting for migrations to reach head before starting the worker..."
@@ -57,6 +45,8 @@ async def main():
 asyncio.run(main())
 PY
 else
+  echo "Running database preflight..."
+  python scripts/preflight_db.py --wait 60
   echo "Applying database migrations..."
   alembic upgrade head
 fi

@@ -107,12 +107,13 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers.setdefault(
             "Content-Security-Policy", settings.csp_header or DEFAULT_CSP
         )
-        # Behind a TLS-terminating proxy, request.url.scheme is "https" only when
-        # uvicorn's proxy headers are trusted (--proxy-headers + FORWARDED_ALLOW_IPS).
-        # FORCE_HTTPS asserts the deployment is HTTPS-only regardless of that wiring.
-        if settings.force_https or request.url.scheme == "https":
+        # HSTS is on by default (production posture) rather than derived from the
+        # proxy-dependent request scheme; HSTS_ENABLED=false is the deliberate
+        # local-plain-http override (see Settings.hsts_enabled).
+        if settings.hsts_enabled:
             response.headers.setdefault(
-                "Strict-Transport-Security", "max-age=63072000; includeSubDomains"
+                "Strict-Transport-Security",
+                f"max-age={settings.hsts_max_age}; includeSubDomains",
             )
         return response
 
