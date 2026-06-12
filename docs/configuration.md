@@ -23,7 +23,9 @@ secrets**.
 | `SLACK_WEBHOOK_SECRET` | no | — | Inbound Slack capture auth |
 | `SLACK_ALERT_WEBHOOK_URL` | no | — | Outbound failure/zero-work alerts |
 | `CORS_ORIGINS` | no | (none) | Browser origins allowed to call the API |
+| `CSP_HEADER` | no | built-in | Override the admin Content-Security-Policy (set `default-src 'self'` after vendoring CDN assets) |
 | `JWT_EXPIRY_HOURS` | no | 24 | Session lifetime |
+| `SIA_SKIP_MIGRATE` | no | 0 | Set by the worker container so only the engine runs migrations |
 
 ## ai_config keys
 

@@ -16,6 +16,7 @@ RUN pip install --no-cache-dir .
 
 # Application code
 COPY . .
+RUN chmod +x docker-entrypoint.sh
 
 # Run as a non-root user
 RUN useradd --create-home --uid 1000 sia && chown -R sia:sia /app
@@ -23,4 +24,7 @@ USER sia
 
 EXPOSE 8000
 
+# The entrypoint waits for Postgres and applies migrations, so a fresh DB just
+# works. Shell form (via bash) so it runs even if a bind-mount drops the +x bit.
+ENTRYPOINT ["bash", "docker-entrypoint.sh"]
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

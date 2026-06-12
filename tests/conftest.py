@@ -26,7 +26,29 @@ from sqlalchemy import text  # noqa: E402
 
 @pytest.fixture(scope="session", autouse=True)
 def migrated_database():
-    """Apply the full migration chain once per test session."""
+    """Apply the full migration chain once per test session, with a clear preflight
+    error when the test database or the pgvector extension is missing."""
+    import psycopg
+
+    dsn = os.environ["DATABASE_URL"].replace("postgresql+asyncpg://", "postgresql://")
+    try:
+        with psycopg.connect(dsn) as conn:
+            has_vector = conn.execute(
+                "SELECT 1 FROM pg_available_extensions WHERE name = 'vector'"
+            ).fetchone()
+            if not has_vector:
+                pytest.exit(
+                    "pgvector is not available in this Postgres. Install the extension "
+                    "(e.g. `apt-get install postgresql-16-pgvector`) or use the "
+                    "pgvector/pgvector image, then create the test DB: `make test-db`.",
+                    returncode=1,
+                )
+    except psycopg.OperationalError as exc:
+        pytest.exit(
+            f"Cannot connect to the test database ({exc}). Create it with "
+            "`make test-db` and set DATABASE_URL to point at it.",
+            returncode=1,
+        )
     command.upgrade(Config("alembic.ini"), "head")
 
 

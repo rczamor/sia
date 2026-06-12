@@ -1,15 +1,14 @@
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse
-from fastapi.templating import Jinja2Templates
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.models.tables import ExpertiseArtifacts, MyThoughts, SourceContent
 from app.runtime import get_runtime
+from app.templating import templates
 
 router = APIRouter(tags=["admin-ui"])
-templates = Jinja2Templates(directory="templates")
 
 
 @router.get("/admin", response_class=HTMLResponse)

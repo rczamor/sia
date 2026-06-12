@@ -15,6 +15,8 @@ services:
   worker:
     build: .
     env_file: .env
+    environment:
+      SIA_SKIP_MIGRATE: "1"  # the engine owns migrations; the worker waits for them
     volumes:
       - .:/app
       - context-store:/srv/sia/context

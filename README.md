@@ -26,10 +26,13 @@ context artifact built from consolidated knowledge — not raw retrieval chunks.
 
 ```bash
 cp .env.example .env   # set DATABASE_URL, an LLM key, OLLAMA_URL, JWT_SECRET, admin hash
-make dev               # engine + worker
-make migrate           # apply database migrations
+make dev               # engine + worker — the engine auto-migrates a fresh DB on boot
 open http://localhost:8000/admin
 ```
+
+The engine entrypoint waits for Postgres and applies migrations before serving, so
+`make dev` works against a blank database. Running outside Docker? Apply migrations
+yourself first: `alembic upgrade head` (or `make migrate`).
 
 No Postgres of your own? `docker compose --profile bundled-db up -d` bundles one.
 

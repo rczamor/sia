@@ -81,12 +81,32 @@ visitor_limiter = SlidingWindowLimiter(max_requests=30, window_seconds=60)
 login_limiter = SlidingWindowLimiter(max_requests=10, window_seconds=60)
 
 
+# Default CSP for the admin UI. The bundled templates load Pico/HTMX/Cytoscape from
+# jsDelivr/unpkg; this restricts script/style origins to self + those CDNs, blocks
+# inline-script injection and eval, and locks framing/base-uri. Operators who vendor
+# the three assets locally should set CSP_HEADER to "default-src 'self'". Override
+# wholesale via the CSP_HEADER env var.
+DEFAULT_CSP = (
+    "default-src 'self'; "
+    "script-src 'self' https://unpkg.com https://cdn.jsdelivr.net; "
+    "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+    "img-src 'self' data:; "
+    "connect-src 'self'; "
+    "object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
+)
+
+
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
+        from app.config import settings
+
         response = await call_next(request)
         response.headers.setdefault("X-Content-Type-Options", "nosniff")
         response.headers.setdefault("X-Frame-Options", "DENY")
         response.headers.setdefault("Referrer-Policy", "same-origin")
+        response.headers.setdefault(
+            "Content-Security-Policy", settings.csp_header or DEFAULT_CSP
+        )
         if request.url.scheme == "https":
             response.headers.setdefault(
                 "Strict-Transport-Security", "max-age=63072000; includeSubDomains"

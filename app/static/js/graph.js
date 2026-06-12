@@ -1,32 +1,3 @@
-{% extends "base.html" %}
-{% set active = "graph" %}
-{% block title %}Graph{% endblock %}
-
-{% block content %}
-<hgroup>
-    <h1>Knowledge Graph</h1>
-    <p>Topics, skills, and entities — structure and health in one view</p>
-</hgroup>
-
-<div class="grid">
-    <div role="group" id="graph-filters">
-        <button data-filter="all" class="contrast">All</button>
-        <button data-filter="topic" class="secondary">Topics</button>
-        <button data-filter="skill" class="secondary">Skills</button>
-        <button data-filter="entity" class="secondary">Entities</button>
-    </div>
-    <select id="overlay-mode">
-        <option value="pillar">Color: pillar (structure)</option>
-        <option value="freshness">Color: freshness (decay)</option>
-        <option value="usage">Color: citation use, 30d</option>
-    </select>
-</div>
-
-<div id="cy" style="height: 70vh; border: 1px solid var(--pico-muted-border-color); border-radius: var(--pico-border-radius);"></div>
-<p><small id="graph-stats"></small></p>
-
-<script src="https://cdn.jsdelivr.net/npm/cytoscape@3.30.2/dist/cytoscape.min.js"></script>
-<script>
 const PILLAR_COLORS = {
     context_layers: "#2563eb",
     product_mgmt: "#7c3aed",
@@ -118,5 +89,3 @@ async function renderGraph() {
     });
 }
 renderGraph();
-</script>
-{% endblock %}

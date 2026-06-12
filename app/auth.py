@@ -1,16 +1,15 @@
 from datetime import datetime, timedelta, timezone
 
+import bcrypt
 from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
-from fastapi.templating import Jinja2Templates
-import bcrypt
 from jose import JWTError, jwt
 
 from app.config import settings
 from app.models.schemas import LoginRequest, TokenResponse
+from app.templating import templates
 
 router = APIRouter(tags=["auth"])
-templates = Jinja2Templates(directory="templates")
 
 ALGORITHM = "HS256"
 SESSION_COOKIE = "sia_session"

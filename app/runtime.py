@@ -154,17 +154,28 @@ async def get_runtime() -> Runtime:
     if _runtime is not None:
         return _runtime
 
+    from sqlalchemy.exc import ProgrammingError
+
     from app.database import async_session
 
-    async with async_session() as db:
-        rows = (await db.execute(select(Plugins).where(Plugins.enabled))).scalars().all()
-        enabled = {row.id: dict(row.config or {}) for row in rows}
-        config_rows = (await db.execute(select(AiConfig))).scalars().all()
-        llm_configs = {
-            row.config_key: dict(row.config_value)
-            for row in config_rows
-            if row.config_key.startswith("llm_")
-        }
+    try:
+        async with async_session() as db:
+            rows = (await db.execute(select(Plugins).where(Plugins.enabled))).scalars().all()
+            enabled = {row.id: dict(row.config or {}) for row in rows}
+            config_rows = (await db.execute(select(AiConfig))).scalars().all()
+            llm_configs = {
+                row.config_key: dict(row.config_value)
+                for row in config_rows
+                if row.config_key.startswith("llm_")
+            }
+    except ProgrammingError as exc:
+        # The plugins/ai_config tables don't exist yet — the database hasn't been
+        # migrated. Give an actionable message instead of a raw UndefinedTable.
+        raise RuntimeError(
+            "Database is not migrated (core tables missing). Run "
+            "`alembic upgrade head` (or `make migrate`) before starting. "
+            "Docker users: the engine entrypoint migrates automatically."
+        ) from exc
 
     manager = PluginManager()
     await manager.initialize_enabled(enabled)
