@@ -52,8 +52,12 @@ async def light_clock_task(source_ids: list[str] | None = None) -> dict:
 @job_queue.periodic(cron="15 * * * *")
 @job_queue.task(name="light_sweep", queue="consolidation")
 async def light_sweep(timestamp: int | None = None) -> dict:
-    """Hourly safety net: consolidate anything the post-ingest chain missed."""
-    return await light_clock_task()
+    """Hourly safety net: consolidate anything the post-ingest chain missed.
+
+    Defers a real light_clock job so it runs through the queue with that task's
+    retry policy, rather than executing inline within the periodic."""
+    job_id = await light_clock_task.defer_async()
+    return {"status": "queued", "job_id": job_id}
 
 
 @job_queue.periodic(cron="0 6 * * *")

@@ -198,6 +198,7 @@ class ContextSections(Base):
     token_estimate: Mapped[int] = mapped_column(Integer, default=0)
     embedding = mapped_column(Vector(768), nullable=True)
     commit_sha: Mapped[str | None] = mapped_column(String(64))
+    content_hash: Mapped[str | None] = mapped_column(String(64))
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
@@ -242,13 +243,21 @@ class Entities(Base):
     name: Mapped[str] = mapped_column(Text, nullable=False)
     entity_type: Mapped[str] = mapped_column(String(50), default="concept")
     aliases: Mapped[list[str]] = mapped_column(ARRAY(Text), default=list)
+    confidence: Mapped[float] = mapped_column(Float, default=0.5)
+    mention_count: Mapped[int] = mapped_column(Integer, default=0)
     embedding = mapped_column(Vector(768), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
 
     __table_args__ = (
         Index("ix_entities_name", "name", unique=True),
+        Index("ix_entities_embedding", "embedding", postgresql_using="hnsw",
+              postgresql_with={"m": 16, "ef_construction": 64},
+              postgresql_ops={"embedding": "vector_cosine_ops"}),
     )
 
 
@@ -264,6 +273,7 @@ class ContextEdges(Base):
     subject_ref: Mapped[str] = mapped_column(Text, nullable=False)
     predicate: Mapped[str] = mapped_column(String(30), nullable=False)
     object_ref: Mapped[str] = mapped_column(Text, nullable=False)
+    label: Mapped[str | None] = mapped_column(Text)  # entity-relation phrase, else null
     weight: Mapped[float] = mapped_column(Float, default=1.0)
     provenance: Mapped[str] = mapped_column(String(30), default="extracted")
     created_by_run: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))

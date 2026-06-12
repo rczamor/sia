@@ -5,7 +5,9 @@ Edge sources:
 - front matter ``related:`` / ``supersedes:``  -> related_to / supersedes
 - front matter ``sources:`` (data-layer UUIDs) -> derived_from
 - ``[[wikilinks]]`` in bodies (Obsidian syntax) -> mentions
-- consolidation clocks add supports/contradicts/requires_skill and entity links
+- consolidation clocks add supports/contradicts/requires_skill, topic->entity
+  ``mentions``, and entity<->entity ``related_to`` edges whose specific relation
+  phrase ("authored", "competes with", …) is carried in the edge ``label``.
 
 Refs are namespaced strings: topic:<path>, skill:<path>, entity:<uuid>,
 source:<uuid>, thought:<uuid>, artifact:<uuid>.
@@ -123,6 +125,7 @@ class GraphService:
         weight: float = 1.0,
         provenance: str = "extracted",
         run_id: uuid.UUID | None = None,
+        label: str | None = None,
     ) -> None:
         if predicate not in PREDICATES:
             raise ValueError(f"Unknown predicate: {predicate}")
@@ -132,13 +135,19 @@ class GraphService:
                 subject_ref=subject_ref,
                 predicate=predicate,
                 object_ref=object_ref,
+                label=label,
                 weight=weight,
                 provenance=provenance,
                 created_by_run=run_id,
             )
             .on_conflict_do_update(
                 index_elements=["subject_ref", "predicate", "object_ref"],
-                set_={"weight": weight, "provenance": provenance, "created_by_run": run_id},
+                set_={
+                    "label": label,
+                    "weight": weight,
+                    "provenance": provenance,
+                    "created_by_run": run_id,
+                },
             )
         )
         await self.db.execute(statement)

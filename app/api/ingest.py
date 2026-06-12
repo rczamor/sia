@@ -80,6 +80,16 @@ async def ingest_from_slack(
     if not hmac.compare_digest(x_sia_slack_token, settings.slack_webhook_secret):
         raise HTTPException(status_code=401, detail="Invalid webhook token")
 
+    # Order matters for idempotency against Slack's webhook retries: do the
+    # failure-prone thought (LLM classify) FIRST, deduped by recent identical
+    # content, then enqueue URLs (idempotent at execution via url_exists). A
+    # transient failure thus leaves nothing half-done, and a retry neither
+    # duplicates the thought nor double-ingests a URL.
+    remaining = URL_IN_TEXT_RE.sub("", request.text).strip()
+    thought_id = None
+    if remaining and len(remaining) > 10:
+        thought_id = await _store_slack_thought_idempotent(db, remaining)
+
     urls = URL_IN_TEXT_RE.findall(request.text)
     queued = []
     for url in urls:
@@ -90,14 +100,32 @@ async def ingest_from_slack(
             continue
         queued.append(await ingest_url_task.defer_async(url=url))
 
-    remaining = URL_IN_TEXT_RE.sub("", request.text).strip()
-    thought_id = None
-    if remaining and len(remaining) > 10:
-        svc = await _get_ingestion_service(db)
-        result = await svc.ingest_thought(content=remaining)
-        thought_id = result["id"]
-
     return {"status": "queued", "urls_queued": len(queued), "thought_id": thought_id}
+
+
+async def _store_slack_thought_idempotent(db: AsyncSession, content: str) -> str:
+    """Store a Slack-captured thought, reusing an identical thought created in the
+    last 10 minutes so a webhook retry does not duplicate it."""
+    from datetime import datetime, timedelta, timezone
+
+    from sqlalchemy import select
+
+    from app.models.tables import MyThoughts
+
+    cutoff = datetime.now(timezone.utc) - timedelta(minutes=10)
+    existing = (
+        await db.execute(
+            select(MyThoughts.id)
+            .where(MyThoughts.content == content, MyThoughts.created_at >= cutoff)
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    if existing is not None:
+        return str(existing)
+
+    svc = await _get_ingestion_service(db)
+    result = await svc.ingest_thought(content=content)
+    return result["id"]
 
 
 @router.post("/expertise")

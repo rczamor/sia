@@ -36,6 +36,7 @@ SEARCHABLE_TABLES: dict[str, dict[str, str]] = {
 
 DEFAULT_RRF_K = 60
 DEFAULT_CANDIDATES_PER_TABLE = 50
+DEFAULT_MIN_SIMILARITY = 0.1  # dense-side cosine floor; tune per embedding model
 
 _SEARCH_SQL = """
 WITH dense AS (
@@ -45,6 +46,7 @@ WITH dense AS (
            ) AS rnk
     FROM {table}
     WHERE embedding IS NOT NULL
+      AND 1 - (embedding <=> CAST(:query_vec AS vector)) >= :min_similarity
     {safety}
     {filters}
     ORDER BY embedding <=> CAST(:query_vec AS vector)
@@ -91,6 +93,10 @@ class SearchService:
             "candidates_per_table": value.get(
                 "candidates_per_table", DEFAULT_CANDIDATES_PER_TABLE
             ),
+            # Relevance floor on the dense side: rows below this cosine similarity
+            # are excluded so off-topic queries don't return nearest-but-unrelated
+            # noise (keyword matches still surface independently).
+            "min_similarity": value.get("min_similarity", DEFAULT_MIN_SIMILARITY),
         }
 
     async def search(
@@ -106,7 +112,13 @@ class SearchService:
         rrf_k = config["rrf_k"]
         query_embedding = await self.embedder.embed(query)
 
-        search_tables = [t for t in (tables or SEARCHABLE_TABLES) if t in SEARCHABLE_TABLES]
+        if tables is not None:
+            unknown = [t for t in tables if t not in SEARCHABLE_TABLES]
+            if unknown:
+                raise ValueError(
+                    f"Unknown search tables {unknown}; valid: {sorted(SEARCHABLE_TABLES)}"
+                )
+        search_tables = list(tables) if tables else list(SEARCHABLE_TABLES)
 
         filters = ""
         if pillar:
@@ -120,6 +132,7 @@ class SearchService:
             "query_vec": str(query_embedding),
             "query_text": query,
             "candidates": config["candidates_per_table"],
+            "min_similarity": config["min_similarity"],
         }
         if pillar:
             params["pillar_filter"] = pillar

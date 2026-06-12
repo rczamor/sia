@@ -65,6 +65,37 @@ async def test_queues_urls_and_stores_thought(client, slack_secret, memory_queue
     assert urls == ["https://93.184.216.34/paper"]
 
 
+async def test_retry_is_idempotent_no_duplicate_thought(
+    client, slack_secret, memory_queue, monkeypatch, db_session
+):
+    """A repeated webhook delivery (Slack retry) within the dedup window must not
+    create a second identical thought."""
+    from sqlalchemy import text
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+    from app.data.ingestion import IngestionService
+    from app.data.lineage import LineageService, TrackedLLMProvider
+    from tests.fakes import FakeEmbedding, FakeLLM
+
+    async def fake_service(db: AsyncSession) -> IngestionService:
+        return IngestionService(
+            db, TrackedLLMProvider(FakeLLM(), LineageService(db)), FakeEmbedding()
+        )
+
+    monkeypatch.setattr("app.api.ingest._get_ingestion_service", fake_service)
+    payload = {"text": "a durable captured thought about context consolidation engines"}
+    headers = {"X-Sia-Slack-Token": slack_secret}
+
+    first = await client.post("/api/ingest/slack", json=payload, headers=headers)
+    second = await client.post("/api/ingest/slack", json=payload, headers=headers)
+    assert first.json()["thought_id"] == second.json()["thought_id"]
+
+    count = (
+        await db_session.execute(text("SELECT count(*) FROM my_thoughts"))
+    ).scalar()
+    assert count == 1
+
+
 async def test_internal_urls_are_dropped(client, slack_secret, memory_queue):
     response = await client.post(
         "/api/ingest/slack",

@@ -70,11 +70,13 @@ async def graph_data(db: AsyncSession = Depends(get_db)):
         )
     ).mappings()
     entities = (
-        await db.execute(text("SELECT id, name, entity_type FROM entities"))
+        await db.execute(
+            text("SELECT id, name, entity_type, confidence, mention_count, aliases FROM entities")
+        )
     ).mappings()
     edges = (
         await db.execute(
-            text("SELECT subject_ref, predicate, object_ref, weight FROM context_edges")
+            text("SELECT subject_ref, predicate, object_ref, weight, label FROM context_edges")
         )
     ).mappings()
 
@@ -93,13 +95,17 @@ async def graph_data(db: AsyncSession = Depends(get_db)):
         }
     for e in entities:
         ref = f"entity:{e['id']}"
+        aliases = e["aliases"] or []
         nodes[ref] = {
             "id": ref,
             "label": e["name"],
             "kind": "entity",
             "pillar": None,
             "status": "active",
-            "priority": 0.4,
+            # confidence drives node size for entities, mirroring topic priority
+            "priority": float(e["confidence"] or 0.4),
+            "aliases": aliases,
+            "mention_count": int(e["mention_count"] or 0),
             "age_days": 0,
             "uses_30d": 0,
         }
@@ -113,6 +119,7 @@ async def graph_data(db: AsyncSession = Depends(get_db)):
                     "source": e["subject_ref"],
                     "target": e["object_ref"],
                     "predicate": e["predicate"],
+                    "label": e["label"],  # relation phrase for entity<->entity edges
                     "weight": e["weight"],
                 }
             )

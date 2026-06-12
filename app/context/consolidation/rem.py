@@ -112,16 +112,32 @@ class RemClock:
                     self.serializer.loads(path, content), indexed, run_id=run.id
                 )
 
+        # 6. Incremental entity extraction for changed topics — so new topics get
+        # entities daily instead of waiting for the weekly deep clock.
+        entities_added = await self._extract_entities_for_changed(changed, run)
+
         summary = (
             f"re-gisted {len(files)} file(s), {len(contradictions)} contradiction(s), "
-            f"{ledger_changes} priority adjustment(s)"
+            f"{ledger_changes} priority adjustment(s), {entities_added} entity(ies)"
         )
         await finish_run(self.db, run, sorted(files), summary)
         return {
             "files_changed": sorted(files),
             "contradictions": len(contradictions),
             "priority_adjustments": ledger_changes,
+            "entities_added": entities_added,
         }
+
+    async def _extract_entities_for_changed(self, changed, run) -> int:
+        topics = [r for r in changed if r.kind == "topic" and r.status == "active"]
+        if not topics:
+            return 0
+        from app.context.entities import EntityExtractor
+
+        extractor = EntityExtractor(
+            self.db, self.store, self.llm, self.embedder, llm_params=self.llm_params
+        )
+        return await extractor.extract_for_topics(topics, run.id)
 
     async def _apply_citation_ledger(self, files: dict[str, str]) -> int:
         """Topics served in builds flagged useful gain priority; flagged-useless

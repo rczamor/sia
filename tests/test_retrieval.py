@@ -85,3 +85,24 @@ async def test_table_scope(db_session, seeded_corpus):
     service = SearchService(db_session, embedder)
     results = await service.search(query="rank fusion", tables=["my_thoughts"], limit=10)
     assert all(r["entity_type"] == "my_thoughts" for r in results)
+
+
+async def test_unknown_table_raises_not_silent_empty(db_session, seeded_corpus):
+    import pytest
+
+    embedder, _ = seeded_corpus
+    service = SearchService(db_session, embedder)
+    with pytest.raises(ValueError):
+        await service.search(query="rank fusion", tables=["sources"])  # wrong alias
+
+
+async def test_similarity_floor_excludes_unrelated_dense_matches(db_session, seeded_corpus):
+    """A query with no token overlap (zero cosine under the hashing embedder) must
+    not return nearest-but-unrelated rows via the dense path."""
+    embedder, _ = seeded_corpus
+    service = SearchService(db_session, embedder)
+    results = await service.search(
+        query="zzzqqq xxwwvv totally disjoint nonsense tokens", limit=10
+    )
+    # dense floor (0.1) plus keyword (no FTS match) → nothing surfaces
+    assert results == []

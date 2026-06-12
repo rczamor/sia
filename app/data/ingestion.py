@@ -123,12 +123,14 @@ class IngestionService:
         if reason:
             logger.warning("Quarantined source %s (%s): %s", item.id, url, reason)
 
-        # 6. Create version record
+        # 6. Create version record. Include `content` so a restore to this initial
+        # version is complete (and re-embeds from a fully-restored state rather than
+        # blending old metadata with whatever content is current).
         await self.versioning.create_version(
             entity_type="source_content",
             entity_id=item.id,
             content_snapshot={
-                "title": title, "url": url, "summary": summary,
+                "title": title, "url": url, "summary": summary, "content": extracted,
                 "pillar": pillars, "source_type": source_type, "tags": tags,
             },
             change_type="create",

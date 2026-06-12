@@ -110,3 +110,14 @@ async def test_feedly_poll_enqueues_per_item(memory_queue, monkeypatch):
     assert enqueued == 2
     urls = [j["args"]["url"] for j in memory_queue.jobs.values() if j["task_name"] == "ingest_url"]
     assert urls == ["https://example.com/a", "https://example.com/b"]
+
+
+async def test_light_sweep_defers_rather_than_runs_inline(memory_queue):
+    """The hourly sweep must enqueue a light_clock job (queue+retry semantics),
+    not execute the clock inline."""
+    from app.jobs.tasks import light_sweep
+
+    result = await light_sweep()
+    assert result["status"] == "queued"
+    tasks = [j["task_name"] for j in memory_queue.jobs.values()]
+    assert "light_clock" in tasks

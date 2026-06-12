@@ -32,7 +32,7 @@ secrets**.
 | `llm_default` | `{provider, model, temperature, max_tokens}` | Fallback for any LLM operation |
 | `llm_classification` | same | Ingestion classify/summarize |
 | `llm_consolidation` | same | All three clocks |
-| `retrieval` | `{rrf_k, candidates_per_table}` | Hybrid search fusion |
+| `retrieval` | `{rrf_k, candidates_per_table, min_similarity}` | Hybrid search fusion; `min_similarity` is the dense-side cosine floor (default 0.1, tune per embedding model) |
 | `embedding` | `{provider, model, dimensions}` | Embedding selection |
 
 `provider` is a plugin id (`anthropic`, `openrouter`, or any third-party LLM plugin).

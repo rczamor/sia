@@ -6,6 +6,7 @@ rows exist for similarity search and joins; the files stay canonical, so the who
 table can be rebuilt from the store at any time.
 """
 
+import hashlib
 import logging
 import math
 from datetime import datetime, timezone
@@ -83,6 +84,16 @@ class StoreIndexer:
         return indexed
 
     async def _upsert(self, document: StoreDocument, commit_sha: str) -> None:
+        serialized = self.serializer.dumps(document)
+        content_hash = hashlib.sha256(serialized.encode("utf-8")).hexdigest()
+
+        row = await self.db.get(ContextSections, document.path)
+        if row is not None and row.content_hash == content_hash:
+            # Unchanged file: do NOT re-embed or touch the row. This keeps updated_at
+            # stable (so "recently changed" actually means changed) and avoids
+            # re-embedding the whole store on every sync.
+            return
+
         front = document.front
         gist = document.section("Gist") or document.body.strip()[:400]
         title = front.get("title") or _title_from(document)
@@ -99,11 +110,11 @@ class StoreIndexer:
             "visibility": str(front.get("visibility", "private")),
             "freshness": _parse_freshness(front.get("freshness")),
             "gist": gist,
-            "token_estimate": estimate_tokens(self.serializer.dumps(document)),
+            "token_estimate": estimate_tokens(serialized),
             "embedding": embedding,
             "commit_sha": commit_sha,
+            "content_hash": content_hash,
         }
-        row = await self.db.get(ContextSections, document.path)
         if row is None:
             self.db.add(ContextSections(path=document.path, **values))
         else:

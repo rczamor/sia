@@ -49,16 +49,24 @@ Topic B ({path_b}):
 Return JSON: {{"contradictions": [{{"claim_a": "...", "claim_b": "...", "note": "..."}}]}}"""
 
 DEEP_ENTITIES = """You are Sia's deep consolidation clock performing entity linking. From these
-topic gists, extract the distinct named entities (people, organizations, tools,
-concepts, methods) that connect topics to each other. Only entities appearing in or
-clearly implied by at least one gist; prefer canonical names.
+topic gists and claims, extract the distinct named entities (people, organizations,
+tools, concepts, methods) that connect topics to each other, and the relationships
+between those entities. Only entities appearing in or clearly implied by the text;
+prefer canonical names.
 
-Topics (path :: gist):
+For each entity give its canonical `name`, `type`, any surface-form `aliases` you
+saw (acronyms, alternate spellings, expansions), and the topic paths it is
+`mentioned_in`. For relationships, give the two entity names and a short relation
+phrase (e.g. "works at", "part of", "competes with", "depends on", "authored").
+
+Topics (path :: gist :: claims):
 {topics}
 
 Return JSON:
 {{"entities": [{{"name": "...", "type": "person|org|tool|concept|method",
-                "mentioned_in": ["<topic path>", "..."]}}]}}"""
+                "aliases": ["..."], "mentioned_in": ["<topic path>", "..."]}}],
+  "relations": [{{"subject": "<entity name>", "relation": "...",
+                  "object": "<entity name>"}}]}}"""
 
 DEEP_SKILL = """You are Sia's deep consolidation clock synthesizing a SKILL — consolidated
 procedural knowledge (how to do something), the counterpart to topics' declarative
