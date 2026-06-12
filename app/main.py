@@ -10,12 +10,17 @@ from app.api.ingest import router as ingest_router
 from app.api.knowledge import router as knowledge_router
 from app.auth import router as auth_router
 from app.database import engine
+from app.jobs.queue import job_queue
+from app.runtime import get_runtime, shutdown_runtime
 from app.ui import router as ui_router
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    yield
+    await get_runtime()  # discover + initialize enabled plugins
+    async with job_queue.open_async():  # web process defers jobs; workers run them
+        yield
+    await shutdown_runtime()
     await engine.dispose()
 
 

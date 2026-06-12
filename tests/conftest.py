@@ -38,6 +38,9 @@ async def clean_tables(migrated_database):
         )
         await session.commit()
     yield
+    from app.runtime import reset_runtime_for_tests
+
+    reset_runtime_for_tests()
     await engine.dispose()
 
 

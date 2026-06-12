@@ -6,15 +6,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.models.schemas import SearchResponse, SearchResult
-from app.providers.embeddings.ollama import OllamaEmbedding
-from app.services.knowledge_store import KnowledgeStore
-from app.services.versioning import VersioningService
+from app.data.knowledge_store import KnowledgeStore
+from app.data.versioning import VersioningService
+from app.runtime import get_runtime
 
 router = APIRouter(prefix="/api/knowledge", tags=["knowledge"])
 
 
-def _get_store(db: AsyncSession) -> KnowledgeStore:
-    return KnowledgeStore(db, OllamaEmbedding())
+async def _get_store(db: AsyncSession) -> KnowledgeStore:
+    runtime = await get_runtime()
+    return KnowledgeStore(db, runtime.embedder)
 
 
 @router.get("/search", response_model=SearchResponse)
@@ -27,8 +28,9 @@ async def search(
     limit: int = Query(default=20, le=100),
     db: AsyncSession = Depends(get_db),
 ):
-    store = _get_store(db)
-    results = await store.hybrid_search(
+    runtime = await get_runtime()
+    search_service = runtime.search_service(db)
+    results = await search_service.search(
         query=q, tables=tables, pillar=pillar, date_from=date_from, date_to=date_to, limit=limit
     )
     return SearchResponse(
@@ -56,7 +58,7 @@ async def list_sources(
     offset: int = 0,
     db: AsyncSession = Depends(get_db),
 ):
-    store = _get_store(db)
+    store = await _get_store(db)
     items = await store.list_items("source_content", pillar=pillar, limit=limit, offset=offset)
     return [
         {
@@ -74,7 +76,7 @@ async def list_thoughts(
     offset: int = 0,
     db: AsyncSession = Depends(get_db),
 ):
-    store = _get_store(db)
+    store = await _get_store(db)
     items = await store.list_items("my_thoughts", pillar=pillar, limit=limit, offset=offset)
     return [
         {
@@ -92,7 +94,7 @@ async def list_artifacts(
     offset: int = 0,
     db: AsyncSession = Depends(get_db),
 ):
-    store = _get_store(db)
+    store = await _get_store(db)
     items = await store.list_items("expertise_artifacts", pillar=pillar, limit=limit, offset=offset)
     return [
         {
@@ -105,7 +107,7 @@ async def list_artifacts(
 
 @router.get("/{table}/{item_id}")
 async def get_item(table: str, item_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
-    store = _get_store(db)
+    store = await _get_store(db)
     item = await store.get_item(table, item_id)
     if not item:
         raise HTTPException(status_code=404, detail="Item not found")
@@ -121,7 +123,7 @@ async def get_item(table: str, item_id: uuid.UUID, db: AsyncSession = Depends(ge
 async def update_item(
     table: str, item_id: uuid.UUID, updates: dict, db: AsyncSession = Depends(get_db)
 ):
-    store = _get_store(db)
+    store = await _get_store(db)
     # Remove fields that shouldn't be directly updated
     updates.pop("id", None)
     updates.pop("embedding", None)
@@ -148,7 +150,7 @@ async def update_item(
 
 @router.delete("/{table}/{item_id}")
 async def delete_item(table: str, item_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
-    store = _get_store(db)
+    store = await _get_store(db)
     deleted = await store.delete_item(table, item_id)
     if not deleted:
         raise HTTPException(status_code=404, detail="Item not found")

@@ -19,7 +19,16 @@ dependencies = [
     "python-jose[cryptography]>=3.3.0",
     "passlib[bcrypt]>=1.7.4",
     "trafilatura>=2.0.0",
+    "procrastinate>=2.15.0",
+    "langfuse>=2.60.0,<3",
 ]
+
+[project.entry-points."sia.plugins"]
+anthropic = "app.plugins.llm.anthropic:AnthropicLLMPlugin"
+openrouter = "app.plugins.llm.openrouter:OpenRouterLLMPlugin"
+ollama = "app.plugins.embeddings.ollama:OllamaEmbeddingsPlugin"
+langfuse = "app.plugins.llmops.langfuse:LangfusePlugin"
+feedly = "app.plugins.ingestion.feedly:FeedlyIngestion"
 
 [project.optional-dependencies]
 dev = [
@@ -45,25 +54,38 @@ line-length = 100
 asyncio_mode = "auto"
 testpaths = ["tests"]
 
-# Layer contract. Phase 0 enforces the current invariants; the Phase 1 package move
-# replaces this with the full four-layer contract (gateway → context → retrieval → data).
+# Four-layer contract: interface (api/ui/jobs) → runtime → retrieval → data, with
+# models/providers/plugins as shared infrastructure below. Imports flow downward only.
+# The Context layer (app.context) slots between interface and retrieval in Phase 2.
 [tool.importlinter]
 root_package = "app"
+
+[[tool.importlinter.contracts]]
+name = "data layer imports nothing above it"
+type = "forbidden"
+source_modules = ["app.data"]
+forbidden_modules = ["app.retrieval", "app.runtime", "app.jobs", "app.api", "app.ui", "app.main"]
+
+[[tool.importlinter.contracts]]
+name = "retrieval layer imports nothing above it"
+type = "forbidden"
+source_modules = ["app.retrieval"]
+forbidden_modules = ["app.runtime", "app.jobs", "app.api", "app.ui", "app.main"]
+
+[[tool.importlinter.contracts]]
+name = "runtime composition root is below interface layers"
+type = "forbidden"
+source_modules = ["app.runtime"]
+forbidden_modules = ["app.jobs", "app.api", "app.ui", "app.main"]
 
 [[tool.importlinter.contracts]]
 name = "models are the bottom layer"
 type = "forbidden"
 source_modules = ["app.models"]
-forbidden_modules = ["app.services", "app.api", "app.ui", "app.providers", "app.plugins"]
+forbidden_modules = ["app.data", "app.retrieval", "app.runtime", "app.jobs", "app.api", "app.ui", "app.providers", "app.plugins"]
 
 [[tool.importlinter.contracts]]
-name = "services do not import interface layers"
+name = "providers and plugins are infrastructure only"
 type = "forbidden"
-source_modules = ["app.services"]
-forbidden_modules = ["app.api", "app.ui", "app.main"]
-
-[[tool.importlinter.contracts]]
-name = "providers are infrastructure only"
-type = "forbidden"
-source_modules = ["app.providers"]
-forbidden_modules = ["app.services", "app.api", "app.ui", "app.main"]
+source_modules = ["app.providers", "app.plugins"]
+forbidden_modules = ["app.data", "app.retrieval", "app.runtime", "app.jobs", "app.api", "app.ui", "app.main"]

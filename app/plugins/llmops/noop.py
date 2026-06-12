@@ -6,7 +6,7 @@ from app.plugins.base import PluginHealth
 
 class NoOpLLMOps:
     """Passthrough LLM ops provider — no tracing, no prompt management.
-    Used in Phase 1 before Langfuse is configured."""
+    The fallback whenever no real LLM-ops plugin is enabled."""
 
     @property
     def plugin_id(self) -> str:
@@ -15,6 +15,10 @@ class NoOpLLMOps:
     @property
     def category(self) -> PluginCategory:
         return PluginCategory.LLMOPS
+
+    @property
+    def provider(self) -> "NoOpLLMOps":
+        return self
 
     async def initialize(self, config: dict[str, Any]) -> None:
         pass

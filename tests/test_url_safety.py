@@ -1,6 +1,6 @@
 import pytest
 
-from app.services.url_safety import UnsafeURLError, assert_safe_url
+from app.data.url_safety import UnsafeURLError, assert_safe_url
 
 
 @pytest.mark.parametrize(
@@ -39,20 +39,8 @@ def test_accepts_public_address():
     assert_safe_url("https://93.184.216.34/article")
 
 
-async def test_ingest_url_endpoint_refuses_internal_targets(client, monkeypatch):
-    from sqlalchemy.ext.asyncio import AsyncSession
-
-    from app.services.ingestion import IngestionService
-    from app.services.lineage import LineageService, TrackedLLMProvider
-    from tests.fakes import FakeEmbedding, FakeLLM
-
-    def fake_service(db: AsyncSession) -> IngestionService:
-        return IngestionService(
-            db, TrackedLLMProvider(FakeLLM(), LineageService(db)), FakeEmbedding()
-        )
-
-    monkeypatch.setattr("app.api.ingest._get_ingestion_service", fake_service)
-
+async def test_ingest_url_endpoint_refuses_internal_targets(client):
+    # The endpoint validates before anything is enqueued — no job, no fetch.
     response = await client.post(
         "/api/ingest/url", json={"url": "http://169.254.169.254/latest/meta-data/"}
     )

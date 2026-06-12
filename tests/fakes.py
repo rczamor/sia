@@ -36,6 +36,37 @@ class FakeEmbedding:
         return [await self.embed(t) for t in texts]
 
 
+class HashingEmbedder:
+    """Bag-of-words hashing embedder: each token hashes to a dimension. Texts that
+    share words are similar — real retrieval semantics, no model server."""
+
+    def __init__(self, dimensions: int = 768):
+        self._dimensions = dimensions
+
+    @property
+    def dimensions(self) -> int:
+        return self._dimensions
+
+    @property
+    def model_name(self) -> str:
+        return "hashing-embed"
+
+    async def embed(self, text: str) -> list[float]:
+        vector = [0.0] * self._dimensions
+        for token in text.lower().split():
+            token = token.strip(".,;:!?()[]\"'")
+            if not token:
+                continue
+            digest = hashlib.sha256(token.encode()).digest()
+            index = int.from_bytes(digest[:4], "big") % self._dimensions
+            vector[index] += 1.0
+        norm = math.sqrt(sum(v * v for v in vector)) or 1.0
+        return [v / norm for v in vector]
+
+    async def embed_batch(self, texts: list[str]) -> list[list[float]]:
+        return [await self.embed(t) for t in texts]
+
+
 class FakeLLM:
     """Canned LLM responses for classification/summarization paths."""
 

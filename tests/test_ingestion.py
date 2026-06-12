@@ -1,8 +1,8 @@
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.services.ingestion import IngestionService
-from app.services.lineage import LineageService, TrackedLLMProvider
+from app.data.ingestion import IngestionService
+from app.data.lineage import LineageService, TrackedLLMProvider
 from tests.fakes import FakeEmbedding, FakeLLM
 
 
@@ -11,7 +11,7 @@ def fake_ingestion(monkeypatch):
     """Route the ingestion API through fake LLM + embedding providers."""
     fake_llm = FakeLLM()
 
-    def fake_service(db: AsyncSession) -> IngestionService:
+    async def fake_service(db: AsyncSession) -> IngestionService:
         return IngestionService(
             db, TrackedLLMProvider(fake_llm, LineageService(db)), FakeEmbedding()
         )
@@ -68,9 +68,9 @@ async def test_search_finds_ingested_artifact(client, fake_ingestion, db_session
     assert response.status_code == 200
 
     # Search goes through the same fake embedder
-    from app.services.knowledge_store import KnowledgeStore
+    from app.retrieval.search import SearchService
 
-    store = KnowledgeStore(db_session, FakeEmbedding())
-    results = await store.hybrid_search(query="reciprocal rank fusion")
+    service = SearchService(db_session, FakeEmbedding())
+    results = await service.search(query="reciprocal rank fusion")
     assert any(r["entity_type"] == "expertise_artifacts" for r in results)
     assert all(isinstance(r["score"], float) for r in results)

@@ -6,10 +6,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.prompts.source_analyst import CLASSIFY_AND_SUMMARIZE
 from app.providers.base import EmbeddingProvider
-from app.services.knowledge_store import KnowledgeStore
-from app.services.lineage import TrackedLLMProvider
-from app.services.url_safety import UnsafeURLError, fetch_public_url
-from app.services.versioning import VersioningService
+from app.data.knowledge_store import KnowledgeStore
+from app.data.lineage import TrackedLLMProvider
+from app.data.url_safety import UnsafeURLError, fetch_public_url
+from app.data.versioning import VersioningService
 
 
 class IngestionService:
@@ -20,11 +20,16 @@ class IngestionService:
         db: AsyncSession,
         llm: TrackedLLMProvider,
         embedder: EmbeddingProvider,
+        classify_params: dict | None = None,
     ):
         self.db = db
         self.llm = llm
         self.store = KnowledgeStore(db, embedder)
         self.versioning = VersioningService(db)
+        # Model selection for classification comes from ai_config (llm_classification).
+        self.classify_params = classify_params or {}
+        self.classify_model = self.classify_params.get("model", "claude-haiku-4-5-20251001")
+        self.classify_temperature = self.classify_params.get("temperature", 0.3)
 
     async def ingest_url(
         self,
@@ -80,8 +85,8 @@ class IngestionService:
                 "tags": ["string"],
                 "source_type": "string",
             },
-            model="claude-haiku-4-5-20251001",
-            temperature=0.3,
+            model=self.classify_model,
+            temperature=self.classify_temperature,
             operation_type="classify",
             prompt_name="source_analyst",
         )
@@ -115,15 +120,10 @@ class IngestionService:
             change_type="create",
         )
 
-        # 6. Find related items
-        related = await self.store.hybrid_search(
-            query=f"{title} {summary}", limit=5
-        )
-        # Filter out self
-        related = [r for r in related if r["id"] != item.id]
-
         await self.db.commit()
 
+        # Related-item discovery is a Retrieval-layer concern; the API layer
+        # composes it onto this result.
         return {
             "id": str(item.id),
             "title": title,
@@ -131,7 +131,6 @@ class IngestionService:
             "pillar": pillars,
             "tags": tags,
             "source_type": source_type,
-            "related": related[:5],
         }
 
     async def ingest_thought(
@@ -146,8 +145,8 @@ class IngestionService:
             analysis = await self.llm.complete_structured(
                 messages=[{"role": "user", "content": f"Classify this thought into pillars: {content[:2000]}"}],
                 schema={"pillars": ["string"]},
-                model="claude-haiku-4-5-20251001",
-                temperature=0.3,
+                model=self.classify_model,
+                temperature=self.classify_temperature,
                 operation_type="classify",
                 prompt_name="thought_classifier",
             )

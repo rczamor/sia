@@ -6,8 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.models.tables import ExpertiseArtifacts, MyThoughts, SourceContent
-from app.providers.embeddings.ollama import OllamaEmbedding
-from app.services.knowledge_store import KnowledgeStore
+from app.runtime import get_runtime
 
 router = APIRouter(tags=["admin-ui"])
 templates = Jinja2Templates(directory="templates")
@@ -47,9 +46,10 @@ async def knowledge_browser(
 ):
     results = []
     if q:
-        store = KnowledgeStore(db, OllamaEmbedding())
+        runtime = await get_runtime()
+        search_service = runtime.search_service(db)
         pillar_filter = [pillar] if pillar else None
-        results = await store.hybrid_search(query=q, pillar=pillar_filter, limit=20)
+        results = await search_service.search(query=q, pillar=pillar_filter, limit=20)
 
     return templates.TemplateResponse(request, "knowledge.html", {
         "query": q,
@@ -68,9 +68,10 @@ async def knowledge_search_partial(
     """HTMX partial — returns just the results list."""
     results = []
     if q and len(q) >= 2:
-        store = KnowledgeStore(db, OllamaEmbedding())
+        runtime = await get_runtime()
+        search_service = runtime.search_service(db)
         pillar_filter = [pillar] if pillar else None
-        results = await store.hybrid_search(query=q, pillar=pillar_filter, limit=20)
+        results = await search_service.search(query=q, pillar=pillar_filter, limit=20)
 
     return templates.TemplateResponse(request, "partials/search_results.html", {
         "results": results,

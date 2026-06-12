@@ -6,7 +6,7 @@ from sqlalchemy import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.tables import ProcessLineage
-from app.providers.base import LLMProvider, LLMResponse
+from app.providers.base import LLMOpsProvider, LLMProvider, LLMResponse
 
 
 class LineageService:
@@ -32,10 +32,12 @@ class LineageService:
         token_count_input: int | None = None,
         token_count_output: int | None = None,
         cost_usd: float | None = None,
+        langfuse_trace_id: str | None = None,
     ) -> uuid.UUID:
         lineage_id = uuid.uuid4()
         stmt = insert(ProcessLineage).values(
             id=lineage_id,
+            langfuse_trace_id=langfuse_trace_id,
             operation_type=operation_type,
             input_content_ids=input_content_ids or [],
             input_context_summary=input_context_summary,
@@ -58,11 +60,30 @@ class LineageService:
 
 
 class TrackedLLMProvider:
-    """Wraps an LLM provider to automatically capture process lineage."""
+    """Wraps an LLM provider to automatically capture process lineage and emit
+    one observability trace per call when an LLM-ops provider is configured."""
 
-    def __init__(self, provider: LLMProvider, lineage: LineageService):
+    def __init__(
+        self,
+        provider: LLMProvider,
+        lineage: LineageService,
+        llmops: LLMOpsProvider | None = None,
+    ):
         self._provider = provider
         self._lineage = lineage
+        self._llmops = llmops
+
+    async def _trace(
+        self, operation_type: str, prompt_name: str | None, messages, output_summary: str
+    ) -> str | None:
+        if self._llmops is None:
+            return None
+        return await self._llmops.trace(
+            name=prompt_name or operation_type,
+            input_data={"messages": messages},
+            output_data={"summary": output_summary},
+            metadata={"operation_type": operation_type},
+        )
 
     async def complete(
         self,
@@ -85,6 +106,7 @@ class TrackedLLMProvider:
         )
         duration_ms = int((time.monotonic() - start) * 1000)
 
+        trace_id = await self._trace(operation_type, prompt_name, messages, response.content[:500])
         await self._lineage.record(
             operation_type=operation_type,
             input_content_ids=input_content_ids,
@@ -97,6 +119,7 @@ class TrackedLLMProvider:
             token_count_input=response.input_tokens,
             token_count_output=response.output_tokens,
             cost_usd=response.cost_usd,
+            langfuse_trace_id=trace_id,
         )
 
         return response
@@ -124,6 +147,7 @@ class TrackedLLMProvider:
         )
         duration_ms = int((time.monotonic() - start) * 1000)
 
+        trace_id = await self._trace(operation_type, prompt_name, messages, str(result)[:500])
         await self._lineage.record(
             operation_type=operation_type,
             input_content_ids=input_content_ids,
@@ -131,6 +155,7 @@ class TrackedLLMProvider:
             model=model,
             output_summary=str(result)[:500],
             duration_ms=duration_ms,
+            langfuse_trace_id=trace_id,
         )
 
         return result

@@ -5,8 +5,10 @@ class Settings(BaseSettings):
     # Database
     database_url: str = "postgresql+asyncpg://localhost/sia"
 
-    # Anthropic
+    # LLM providers (Sia core uses LLMs only for internal context operations)
     anthropic_api_key: str = ""
+    openrouter_api_key: str = ""
+    openrouter_base_url: str = ""
 
     # Ollama
     ollama_url: str = "http://host.docker.internal:11434"

@@ -10,3 +10,13 @@ services:
     restart: unless-stopped
     extra_hosts:
       - "host.docker.internal:host-gateway"
+
+  worker:
+    build: .
+    env_file: .env
+    volumes:
+      - .:/app
+    command: procrastinate --app=app.jobs.queue.job_queue worker
+    restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
