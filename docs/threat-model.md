@@ -55,6 +55,18 @@ visibility filtering happens at store reads (builder, MCP list/read tools), not
 just at routes. Private topics never reach public principals, including via graph
 expansion. Every build is audited per principal.
 
+The **consolidated store** has a per-row `visibility` column and is filtered
+everywhere. The **raw data layer** (`source_content`, `my_thoughts`,
+`expertise_artifacts`) has no such column — it is the owner's private corpus — so
+access to it requires a principal trusted with private visibility
+(`Principal.can_read_raw_data`): owner, or an agent the owner explicitly granted
+private access. This gate covers `/api/knowledge/*` and `/api/ingest/*` (owner-only
+via middleware), and the MCP tools `sia_search`, `sia_resolve_source`,
+`sia_add_thought`, `sia_add_source`. A public-only agent or visitor cannot read,
+search, resolve, or write the raw layer; they consume only the visibility-filtered
+consolidated store via `sia_build_context`. Entity nodes/edges carry no private
+content and are exposed only through the owner-only graph endpoint.
+
 ## 5. Supply chain
 
 Pinned dependency floors, pip-audit + gitleaks in CI, non-root container user.

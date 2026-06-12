@@ -85,6 +85,50 @@ async def test_consolidate_is_owner_only(as_visitor):
         await gateway.sia_consolidate("light")
 
 
+async def test_public_only_principal_cannot_touch_raw_data():
+    """A public-only agent must not read the raw data layer via search or
+    resolve_source (no per-row visibility there)."""
+    from app.context.principals import Principal
+
+    public_agent = Principal(
+        id="agent-public", kind="agent", token_budget=8000,
+        allowed_visibilities=("public",), allow_fallback=False,
+    )
+    token = gateway.current_principal.set(public_agent)
+    try:
+        with pytest.raises(PermissionError):
+            await gateway.sia_search(query="anything")
+        with pytest.raises(PermissionError):
+            await gateway.sia_resolve_source(source_id="00000000-0000-0000-0000-000000000000")
+        with pytest.raises(PermissionError):
+            await gateway.sia_add_thought(content="x")
+    finally:
+        gateway.current_principal.reset(token)
+
+
+async def test_private_trusted_agent_may_resolve_source(db_session, store, fake_runtime):
+    """An agent granted private visibility passes the raw-data gate."""
+    from app.context.principals import Principal
+    from app.data.knowledge_store import KnowledgeStore
+    from tests.fakes import HashingEmbedder
+
+    item = await KnowledgeStore(db_session, HashingEmbedder()).add_source(
+        title="A source", url="https://example.com/s", summary="sum"
+    )
+    await db_session.commit()
+
+    private_agent = Principal(
+        id="agent-trusted", kind="agent", token_budget=8000,
+        allowed_visibilities=("public", "private"), allow_fallback=True,
+    )
+    token = gateway.current_principal.set(private_agent)
+    try:
+        result = await gateway.sia_resolve_source(source_id=str(item.id))
+        assert result["title"] == "A source"
+    finally:
+        gateway.current_principal.reset(token)
+
+
 async def test_flag_updates_build(db_session, store, as_owner):
     embedder = await seed(db_session, store)
     from app.context.builder import ContextBuilder

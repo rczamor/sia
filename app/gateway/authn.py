@@ -50,6 +50,10 @@ OWNER_PREFIXES = (
     "/api/context/health",
     "/api/context/runs",
     "/api/principals",
+    # raw data layer (read CRUD + ingestion) has no per-row visibility; it is the
+    # owner's private corpus and must not be reachable by agent/visitor principals
+    "/api/knowledge",
+    "/api/ingest",
     "/docs",
     "/openapi.json",
     "/redoc",

@@ -29,6 +29,14 @@ class Principal:
     def is_owner(self) -> bool:
         return self.kind == "owner"
 
+    @property
+    def can_read_raw_data(self) -> bool:
+        """The raw data layer (source_content / my_thoughts / expertise_artifacts)
+        has no per-row visibility column, so only a principal trusted with private
+        visibility may touch it. Consolidated-store reads remain visibility-filtered
+        for everyone."""
+        return "private" in self.allowed_visibilities
+
 
 VISITOR = Principal(
     id="visitor",

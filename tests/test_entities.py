@@ -24,9 +24,10 @@ async def test_exact_name_dedup_reinforces(db_session):
     assert row.confidence > 0.5
 
 
-async def test_semantic_merge_records_alias(db_session):
-    """A different surface form of the same concept merges into one entity as an
-    alias rather than fragmenting into a second node."""
+async def test_semantic_merge_dedups_without_persisting_alias(db_session):
+    """A different surface form of the same concept resolves to the one entity via
+    embedding similarity — but the form is NOT persisted as an alias (so a borderline
+    semantic match can't permanently fuse two concepts)."""
     svc = EntityService(db_session, HashingEmbedder())
     first = await svc.resolve_or_create("Reciprocal Rank Fusion", "concept")
     # same tokens, different case → identical embedding → semantic match
@@ -40,7 +41,22 @@ async def test_semantic_merge_records_alias(db_session):
             text("SELECT aliases FROM entities WHERE id = :id"), {"id": str(first.id)}
         )
     ).scalar()
-    assert "reciprocal rank fusion" in aliases
+    assert aliases == []  # semantic matches are not persisted as aliases
+
+
+async def test_alias_cannot_be_claimed_by_two_entities(db_session):
+    """Once an alias belongs to one entity, a different entity declaring the same
+    alias is refused it (no nondeterministic split)."""
+    svc = EntityService(db_session, HashingEmbedder())
+    e1 = await svc.resolve_or_create("Entity One alpha", "concept", aliases=["shared"])
+    e2 = await svc.resolve_or_create("Entity Two beta", "concept", aliases=["shared"])
+    await db_session.commit()
+    assert e1.id != e2.id
+    a1 = (await db_session.execute(
+        text("SELECT aliases FROM entities WHERE id = :id"), {"id": str(e1.id)})).scalar()
+    a2 = (await db_session.execute(
+        text("SELECT aliases FROM entities WHERE id = :id"), {"id": str(e2.id)})).scalar()
+    assert "shared" in a1 and "shared" not in a2  # only the first claimant keeps it
 
 
 async def test_declared_alias_attaches_not_fragments(db_session):

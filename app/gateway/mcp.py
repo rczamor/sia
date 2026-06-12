@@ -63,11 +63,13 @@ async def sia_build_context(
 @mcp_server.tool()
 async def sia_search(query: str, limit: int = 10) -> list[dict]:
     """Targeted hybrid search (BM25 + dense, RRF-fused) over the raw data layer.
-    Prefer sia_build_context for anything decision-shaped."""
+    Owner/private-trusted principals only — the data layer has no per-row
+    visibility. Prefer sia_build_context for anything decision-shaped."""
     from app.database import async_session
     from app.runtime import get_runtime
 
-    _principal()  # authenticated access required; results are metadata-level
+    if not _principal().can_read_raw_data:
+        raise PermissionError("Raw-data search requires private visibility")
     runtime = await get_runtime()
     async with async_session() as db:
         results = await runtime.search_service(db).search(query=query, limit=min(limit, 25))
@@ -148,10 +150,10 @@ async def sia_read_skill(path: str) -> str:
 
 @mcp_server.tool()
 async def sia_add_thought(content: str, pillar: str | None = None) -> dict:
-    """Store an owner thought into the data layer (owner/agent principals only)."""
-    principal = _principal()
-    if principal.kind == "visitor":
-        raise PermissionError("Visitors cannot write")
+    """Store an owner thought into the data layer. Requires private-visibility
+    trust (owner or an agent explicitly granted private access)."""
+    if not _principal().can_read_raw_data:
+        raise PermissionError("Writing to the data layer requires private visibility")
     from app.database import async_session
     from app.runtime import get_runtime
 
@@ -165,10 +167,10 @@ async def sia_add_thought(content: str, pillar: str | None = None) -> dict:
 
 @mcp_server.tool()
 async def sia_add_source(url: str, notes: str | None = None) -> dict:
-    """Queue a URL for ingestion into the data layer (owner/agent principals only)."""
-    principal = _principal()
-    if principal.kind == "visitor":
-        raise PermissionError("Visitors cannot write")
+    """Queue a URL for ingestion into the data layer. Requires private-visibility
+    trust (owner or an agent explicitly granted private access)."""
+    if not _principal().can_read_raw_data:
+        raise PermissionError("Writing to the data layer requires private visibility")
     from app.data.url_safety import assert_safe_url
     from app.jobs.tasks import ingest_url_task
 
@@ -216,11 +218,14 @@ async def sia_consolidate(clock: str) -> dict:
 
 @mcp_server.tool()
 async def sia_resolve_source(source_id: str) -> dict:
-    """Resolve a [source:<uuid>] citation to its underlying data-layer record."""
+    """Resolve a [source:<uuid>] citation to its underlying data-layer record.
+    Requires private-visibility trust — the data layer is owner-private and
+    includes quarantined/untrusted rows."""
     from app.database import async_session
     from app.models.tables import SourceContent
 
-    _principal()
+    if not _principal().can_read_raw_data:
+        raise PermissionError("Resolving raw sources requires private visibility")
     async with async_session() as db:
         row = await db.get(SourceContent, uuid.UUID(source_id))
         if row is None:

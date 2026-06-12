@@ -125,10 +125,15 @@ async def test_agent_key_lifecycle(client, anon_client, db_session, fake_runtime
 async def test_agent_cannot_touch_owner_surface(client, anon_client, db_session):
     created = await client.post("/api/principals", json={"purpose": "limited"})
     api_key = created.json()["api_key"]
-    response = await anon_client.get(
-        "/api/config/", headers={"Authorization": f"Bearer {api_key}"}
+    headers = {"Authorization": f"Bearer {api_key}"}
+    # config, principal admin, and the raw data layer are all owner-only
+    for path in ("/api/config/", "/api/knowledge/thoughts", "/api/knowledge/search?q=x"):
+        response = await anon_client.get(path, headers=headers)
+        assert response.status_code == 403, f"{path} reachable by agent: {response.status_code}"
+    ingest = await anon_client.post(
+        "/api/ingest/thought", json={"content": "agent write"}, headers=headers
     )
-    assert response.status_code == 403
+    assert ingest.status_code == 403
 
 
 async def test_agent_cannot_read_admin_visualizations(client, anon_client, db_session):

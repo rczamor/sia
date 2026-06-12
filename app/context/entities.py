@@ -19,7 +19,7 @@ import logging
 import uuid
 from dataclasses import dataclass
 
-from sqlalchemy import func, select, text
+from sqlalchemy import func, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.context.graph import GraphService, file_ref
@@ -32,7 +32,11 @@ from app.providers.base import EmbeddingProvider
 
 logger = logging.getLogger(__name__)
 
-ENTITY_MERGE_THRESHOLD = 0.88  # cosine similarity above which two names are one entity
+# Cosine similarity above which two names are treated as one entity. Deliberately
+# high: a semantic match is NOT persisted as an alias (see resolve_or_create), so a
+# borderline false match is re-evaluated each call rather than fused forever — only
+# LLM-declared aliases are persisted.
+ENTITY_MERGE_THRESHOLD = 0.92
 ENTITY_BATCH_SIZE = 25  # topics per extraction LLM call (covers the whole store in batches)
 
 
@@ -41,6 +45,10 @@ class ResolvedEntity:
     id: uuid.UUID
     name: str
     created: bool
+    # canonical name + the declared aliases actually attached to THIS entity; the
+    # extractor maps only these surface forms to this id (a rejected/claimed alias
+    # is excluded, so relations never resolve to the wrong node)
+    forms: list[str]
 
 
 class EntityService:
@@ -79,15 +87,16 @@ class EntityService:
             created = True
         else:
             created = False
-            # the queried form resolved to a differently-named entity (alias or
-            # semantic match) — record it as an alias so it resolves directly next time
-            if name != entity.name:
-                declared = [name, *declared]
+            # NOTE: a semantic/alias-resolved queried form is NOT auto-persisted as an
+            # alias — only explicit declared aliases are. This keeps a borderline
+            # semantic match from fusing two concepts permanently in the alias index.
 
-        await self._add_aliases(entity, declared)
+        # Attach only the declared aliases that this entity may legitimately claim;
+        # `attached` is the subset actually recorded (clash-free).
+        attached = await self._add_aliases(entity, declared)
         await self._reinforce(entity, confidence)
         await self.db.flush()
-        return ResolvedEntity(entity.id, entity.name, created=created)
+        return ResolvedEntity(entity.id, entity.name, created=created, forms=[entity.name, *attached])
 
     async def _find(self, name: str, entity_type: str) -> Entities | None:
         """Locate an existing entity by exact name, then alias, then embedding
@@ -99,9 +108,13 @@ class EntityService:
         if existing is not None:
             return existing
 
-        # 2. alias match (name already a recorded alias)
+        # 2. alias match. At most one entity may hold a given alias (enforced by the
+        # clash check in _add_aliases), so the result is deterministic; ORDER BY id
+        # guards against any legacy duplicate.
         alias_hit = (
-            await self.db.execute(select(Entities).where(Entities.aliases.any(name)).limit(1))
+            await self.db.execute(
+                select(Entities).where(Entities.aliases.any(name)).order_by(Entities.id).limit(1)
+            )
         ).scalar_one_or_none()
         if alias_hit is not None:
             return alias_hit
@@ -129,21 +142,28 @@ class EntityService:
             return await self.db.get(Entities, near["id"])
         return None
 
-    async def _add_aliases(self, entity: Entities, aliases: list[str]) -> None:
-        """Attach surface forms to ``entity`` unless one already names a *different*
-        entity (avoid stealing another node's identity)."""
+    async def _add_aliases(self, entity: Entities, aliases: list[str]) -> list[str]:
+        """Attach surface forms to ``entity`` unless one already names OR aliases a
+        *different* entity (avoid stealing another node's identity). Returns the
+        aliases actually attached."""
         current = list(entity.aliases or [])
+        attached: list[str] = []
         for alias in aliases:
             if alias == entity.name or alias in current:
                 continue
             clash = (
                 await self.db.execute(
-                    select(Entities.id).where(Entities.name == alias, Entities.id != entity.id)
+                    select(Entities.id).where(
+                        Entities.id != entity.id,
+                        or_(Entities.name == alias, Entities.aliases.any(alias)),
+                    )
                 )
-            ).scalar_one_or_none()
+            ).first()
             if clash is None:
                 current.append(alias)
+                attached.append(alias)
         entity.aliases = current
+        return attached
 
     @staticmethod
     async def _reinforce(entity: Entities, confidence: float) -> None:
@@ -224,9 +244,12 @@ class EntityExtractor:
             if resolved is None:
                 continue
             new_entities += int(resolved.created)
-            for form in [item.get("name", ""), *aliases]:
+            # map only the forms this entity authoritatively owns (canonical name +
+            # aliases actually attached) — a rejected/claimed alias is excluded, so a
+            # relation never resolves to the wrong node
+            for form in resolved.forms:
                 form = (form or "").strip()
-                if form:
+                if form and form not in name_to_id:
                     name_to_id[form] = resolved.id
             for path in item.get("mentioned_in") or []:
                 if path in known_paths:
