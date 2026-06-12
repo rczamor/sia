@@ -28,6 +28,10 @@ class Settings(BaseSettings):
     feedly_access_token: str = ""
     feedly_board_id: str = ""
 
+    # CORS: comma-separated browser origins allowed to call the API (empty = none;
+    # MCP/REST consumers are server-side and need no CORS)
+    cors_origins: str = ""
+
     # Context store (git-backed Markdown files)
     context_store_path: str = "/srv/sia/context"
     context_store_remote: str = ""  # optional push mirror, e.g. git@github.com:user/sia-context

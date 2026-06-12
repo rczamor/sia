@@ -101,3 +101,38 @@ async def feedly_poll(timestamp: int | None = None) -> int:
         enqueued += 1
     logger.info("feedly_poll enqueued %d items", enqueued)
     return enqueued
+
+
+@job_queue.periodic(cron="0 8 * * 0")
+@job_queue.task(name="autoresearch", queue="optimization")
+async def autoresearch_task(timestamp: int | None = None) -> dict:
+    """Weekly ratchet iteration over retrieval tunables. Opt-in: runs only when the
+    autoresearch plugin row is enabled."""
+    from sqlalchemy import text as sql_text
+
+    from app.context.optimization.ratchet import TUNABLES, Ratchet
+    from app.database import async_session
+    from app.runtime import get_runtime
+
+    async with async_session() as db:
+        enabled = (
+            await db.execute(
+                sql_text("SELECT enabled FROM plugins WHERE id = 'autoresearch'")
+            )
+        ).scalar()
+        if not enabled:
+            logger.info("autoresearch disabled; skipping")
+            return {"skipped": True}
+
+        runtime = await get_runtime()
+        ratchet = Ratchet(db, runtime.context_store, runtime.embedder)
+        results = {}
+        for parameter in TUNABLES:
+            outcome = await ratchet.iterate(parameter)
+            results[parameter] = {
+                "promoted": outcome.promoted,
+                "value": outcome.candidate if outcome.promoted else outcome.incumbent,
+                "score": outcome.candidate_score,
+            }
+        logger.info("autoresearch iteration: %s", results)
+        return results

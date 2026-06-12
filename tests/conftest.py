@@ -43,7 +43,7 @@ async def clean_tables(migrated_database):
         await session.execute(
             text(
                 "TRUNCATE source_content, my_thoughts, expertise_artifacts, "
-                "consolidations, content_versions, process_lineage, "
+                "content_versions, process_lineage, "
                 "context_sections, consolidation_runs, entities, context_edges, "
                 "context_builds CASCADE"
             )

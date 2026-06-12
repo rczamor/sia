@@ -5,7 +5,6 @@ from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.tables import (
-    Consolidations,
     ExpertiseArtifacts,
     MyThoughts,
     SourceContent,
@@ -17,7 +16,6 @@ TABLE_MAP = {
     "source_content": SourceContent,
     "my_thoughts": MyThoughts,
     "expertise_artifacts": ExpertiseArtifacts,
-    "consolidations": Consolidations,
 }
 
 
@@ -42,6 +40,7 @@ class KnowledgeStore:
         your_notes: str | None = None,
         tags: list[str] | None = None,
         trust_tier: str = "untrusted",
+        quarantined: bool = False,
     ) -> SourceContent:
         embed_text = f"{title} {summary or ''} {content or ''}"[:8000]
         embedding = await self.embedder.embed(embed_text)
@@ -57,6 +56,7 @@ class KnowledgeStore:
             your_notes=your_notes,
             tags=tags or [],
             trust_tier=trust_tier,
+            quarantined=quarantined,
             embedding=embedding,
         )
         self.db.add(item)

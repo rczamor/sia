@@ -160,6 +160,38 @@ async def delete_item(table: str, item_id: uuid.UUID, db: AsyncSession = Depends
 
 # --- Versions ---
 
+@router.post("/{table}/{item_id}/restore/{version_number}")
+async def restore_version(
+    table: str, item_id: uuid.UUID, version_number: int, db: AsyncSession = Depends(get_db)
+):
+    """Restore an item to a previous version snapshot (a new version is recorded,
+    so restores are themselves audited and reversible)."""
+    versioning = VersioningService(db)
+    version = await versioning.get_version(table, item_id, version_number)
+    if version is None:
+        raise HTTPException(status_code=404, detail="Version not found")
+
+    store = await _get_store(db)
+    snapshot = {
+        k: v
+        for k, v in version.content_snapshot.items()
+        if k not in ("id", "created_at", "updated_at", "embedding", "search_vector")
+    }
+    item = await store.update_item(table, item_id, snapshot)
+    if item is None:
+        raise HTTPException(status_code=404, detail="Item not found")
+
+    new_snapshot = {c.name: getattr(item, c.name) for c in item.__table__.columns
+                    if c.name not in ("embedding", "search_vector")}
+    new_snapshot["id"] = str(new_snapshot["id"])
+    await versioning.create_version(
+        entity_type=table, entity_id=item_id, content_snapshot=new_snapshot,
+        change_type="update", change_reason=f"restore to v{version_number}",
+    )
+    await db.commit()
+    return {"message": f"Restored to version {version_number}", "id": str(item_id)}
+
+
 @router.get("/versions/{entity_type}/{entity_id}")
 async def get_versions(
     entity_type: str, entity_id: uuid.UUID, db: AsyncSession = Depends(get_db)

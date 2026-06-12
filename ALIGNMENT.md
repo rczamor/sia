@@ -32,6 +32,8 @@ code, not by reading docs.
 | 9 | **Multi-pillar UI impossible**: thought form uses checkboxes but JSON endpoint expects an array; form-encoding sends repeated keys the schema rejects. | Same root cause as #6 | Phase 0 |
 | 10 | **`plugins.credentials` JSONB stores secrets in plaintext** at rest. | `tables.py:290` | Phase 1: plugin SDK uses env-based secrets; column dropped |
 | 11 | **Search has never executed successfully**: SQLAlchemy `text()` treats `:query_vec::vector` as an escaped-colon literal, so the bind param is never substituted and every `hybrid_search` call raises `PostgresSyntaxError`. Any admin-UI search 500s. | First-ever integration test failed; reproduced in isolation | Phase 0: `CAST(:query_vec AS vector)`; pillar/date filters parameterized in the same change |
+| 12 | **Login crashes with current deps**: passlib 1.7.4 is incompatible with bcrypt>=4.1 (`__about__` removal + 72-byte check) — any password verify raised. | Reproduced generating a hash | Phase 3: replaced passlib with direct bcrypt |
+| 13 | **Item updates crash on versioning**: PUT snapshots include datetime columns; JSONB serialization raised TypeError on every manual edit. | Integration test | Phase 5: snapshots coerced in VersioningService |
 
 ## 3. Dead schema / dead code (removed in Phase 0)
 

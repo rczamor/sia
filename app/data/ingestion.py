@@ -1,15 +1,19 @@
+import logging
 import uuid
 
 import httpx
 import trafilatura
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.data.quarantine import quarantine_reason
 from app.prompts.source_analyst import CLASSIFY_AND_SUMMARIZE
 from app.providers.base import EmbeddingProvider
 from app.data.knowledge_store import KnowledgeStore
 from app.data.lineage import TrackedLLMProvider
 from app.data.url_safety import UnsafeURLError, fetch_public_url
 from app.data.versioning import VersioningService
+
+logger = logging.getLogger(__name__)
 
 
 class IngestionService:
@@ -96,7 +100,11 @@ class IngestionService:
         tags = analysis.get("tags", [])
         source_type = analysis.get("source_type", "article")
 
-        # 4. Store in knowledge base (embedding happens inside add_source).
+        # 4. Quarantine screen: injection markers, oversize, off-domain content is
+        # stored for audit but never consolidated until an operator clears it.
+        reason = quarantine_reason(extracted, pillars=analysis.get("pillars"))
+
+        # 5. Store in knowledge base (embedding happens inside add_source).
         # Trust tier: an annotated item passed through human hands (curated);
         # a bare URL or feed item is untrusted until the review gate clears it.
         item = await self.store.add_source(
@@ -110,9 +118,12 @@ class IngestionService:
             your_notes=notes,
             tags=tags,
             trust_tier="curated" if notes else "untrusted",
+            quarantined=reason is not None,
         )
+        if reason:
+            logger.warning("Quarantined source %s (%s): %s", item.id, url, reason)
 
-        # 5. Create version record
+        # 6. Create version record
         await self.versioning.create_version(
             entity_type="source_content",
             entity_id=item.id,
@@ -134,6 +145,7 @@ class IngestionService:
             "pillar": pillars,
             "tags": tags,
             "source_type": source_type,
+            "quarantined": reason,
         }
 
     async def ingest_thought(

@@ -118,35 +118,6 @@ class ExpertiseArtifacts(Base):
     )
 
 
-class Consolidations(Base):
-    __tablename__ = "consolidations"
-
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    insight_text: Mapped[str] = mapped_column(Text, nullable=False)
-    connected_source_ids: Mapped[list[uuid.UUID]] = mapped_column(
-        ARRAY(UUID(as_uuid=True)), default=list
-    )
-    connected_thought_ids: Mapped[list[uuid.UUID]] = mapped_column(
-        ARRAY(UUID(as_uuid=True)), default=list
-    )
-    pillar: Mapped[list[str]] = mapped_column(ARRAY(String), default=list)
-    confidence: Mapped[float] = mapped_column(Float, default=0.0)
-    consolidation_type: Mapped[str] = mapped_column(String(50), default="connection")
-    embedding = mapped_column(Vector(768), nullable=True)
-    search_vector = mapped_column(TSVECTOR, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
-    )
-
-    __table_args__ = (
-        Index("ix_consolidations_embedding", "embedding", postgresql_using="hnsw",
-              postgresql_with={"m": 16, "ef_construction": 64},
-              postgresql_ops={"embedding": "vector_cosine_ops"}),
-        Index("ix_consolidations_search", "search_vector", postgresql_using="gin"),
-        Index("ix_consolidations_pillar", "pillar", postgresql_using="gin"),
-    )
-
-
 class ContentVersions(Base):
     __tablename__ = "content_versions"
 

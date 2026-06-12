@@ -25,7 +25,6 @@ SEARCHABLE_TABLES: dict[str, dict[str, str]] = {
     "source_content": {"title": "title", "preview": "summary"},
     "my_thoughts": {"title": "NULL", "preview": "LEFT(content, 200)"},
     "expertise_artifacts": {"title": "title", "preview": "LEFT(content, 200)"},
-    "consolidations": {"title": "NULL", "preview": "LEFT(insight_text, 200)"},
 }
 
 DEFAULT_RRF_K = 60

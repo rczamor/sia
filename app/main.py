@@ -13,7 +13,8 @@ from app.auth import router as auth_router
 from app.context.store.layout import scaffold_store
 from app.database import engine
 from app.gateway.api import router as gateway_router
-from app.gateway.authn import AuthMiddleware
+from app.config import settings
+from app.gateway.authn import AuthMiddleware, SecurityHeadersMiddleware
 from app.gateway.mcp import build_mcp_asgi_app, mcp_server
 from app.jobs.queue import job_queue
 from app.runtime import get_runtime, shutdown_runtime
@@ -34,13 +35,15 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="Sia — Context Engine", version="0.1.0", lifespan=lifespan)
 
 app.add_middleware(AuthMiddleware)  # deny-by-default: see app/gateway/authn.py
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+app.add_middleware(SecurityHeadersMiddleware)
+if settings.cors_origins:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=[o.strip() for o in settings.cors_origins.split(",") if o.strip()],
+        allow_credentials=False,
+        allow_methods=["GET", "POST"],
+        allow_headers=["Authorization", "Content-Type", "X-Sia-Key"],
+    )
 
 templates = Jinja2Templates(directory="templates")
 app.mount("/static", StaticFiles(directory="static"), name="static")

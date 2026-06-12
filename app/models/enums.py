@@ -76,4 +76,3 @@ class EntityType(str, enum.Enum):
     SOURCE_CONTENT = "source_content"
     MY_THOUGHTS = "my_thoughts"
     EXPERTISE_ARTIFACTS = "expertise_artifacts"
-    CONSOLIDATIONS = "consolidations"

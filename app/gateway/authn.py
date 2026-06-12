@@ -69,9 +69,34 @@ visitor_limiter = SlidingWindowLimiter(max_requests=30, window_seconds=60)
 login_limiter = SlidingWindowLimiter(max_requests=10, window_seconds=60)
 
 
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+        response.headers.setdefault("X-Content-Type-Options", "nosniff")
+        response.headers.setdefault("X-Frame-Options", "DENY")
+        response.headers.setdefault("Referrer-Policy", "same-origin")
+        if request.url.scheme == "https":
+            response.headers.setdefault(
+                "Strict-Transport-Security", "max-age=63072000; includeSubDomains"
+            )
+        return response
+
+
 class AuthMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         path = request.url.path
+
+        # CSRF defense-in-depth for the cookie-authed admin: SameSite=Lax already
+        # blocks cross-site POSTs; additionally refuse unsafe methods whose Origin
+        # disagrees with the Host.
+        if (
+            request.method in ("POST", "PUT", "PATCH", "DELETE")
+            and request.cookies.get(SESSION_COOKIE)
+            and (origin := request.headers.get("origin"))
+        ):
+            origin_host = origin.split("://", 1)[-1].split("/", 1)[0]
+            if origin_host != request.headers.get("host", ""):
+                return JSONResponse({"detail": "Cross-origin request refused"}, status_code=403)
 
         if path.startswith(PUBLIC_PREFIXES) or path == "/":
             if path.startswith(("/login", "/api/auth/login")) and request.method == "POST":
