@@ -38,6 +38,9 @@ dev = [
     "httpx>=0.28.0",
     "ruff>=0.8.0",
     "import-linter>=2.1",
+    # used by migration 003 (procrastinate schema) and the conftest preflight;
+    # also pulled transitively by procrastinate, but declared here to be explicit
+    "psycopg[binary]>=3.1",
 ]
 
 [build-system]

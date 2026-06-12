@@ -26,25 +26,32 @@ else:
 PY
 
 if [ "${SIA_SKIP_MIGRATE:-0}" = "1" ]; then
-  echo "Waiting for migrations to be applied by the engine..."
+  echo "Waiting for migrations to reach head before starting the worker..."
   python - <<'PY'
 import asyncio, os, sys
+from alembic.config import Config
+from alembic.script import ScriptDirectory
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine
 
+# The worker must not start until the engine has migrated to HEAD — alembic_version
+# appears at the START of migration, so existence alone is not enough; compare the
+# stamped revision to the head revision.
+head = ScriptDirectory.from_config(Config("alembic.ini")).get_current_head()
+
 async def main():
     engine = create_async_engine(os.environ["DATABASE_URL"])
-    for _ in range(120):
+    for _ in range(180):
         try:
             async with engine.connect() as conn:
-                ok = await conn.scalar(text("SELECT to_regclass('public.alembic_version')"))
-                if ok:
+                current = await conn.scalar(text("SELECT version_num FROM alembic_version"))
+                if current == head:
                     await engine.dispose()
                     return
         except Exception:
             pass
         await asyncio.sleep(1)
-    print("Timed out waiting for migrations", file=sys.stderr)
+    print(f"Timed out waiting for migrations to reach head ({head})", file=sys.stderr)
     sys.exit(1)
 
 asyncio.run(main())

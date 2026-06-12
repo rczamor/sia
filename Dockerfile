@@ -24,6 +24,7 @@ USER sia
 
 EXPOSE 8000
 
-# The entrypoint waits for Postgres and applies migrations, so a fresh DB just works.
-ENTRYPOINT ["./docker-entrypoint.sh"]
+# The entrypoint waits for Postgres and applies migrations, so a fresh DB just
+# works. Shell form (via bash) so it runs even if a bind-mount drops the +x bit.
+ENTRYPOINT ["bash", "docker-entrypoint.sh"]
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
