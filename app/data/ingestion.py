@@ -76,9 +76,41 @@ class IngestionService:
             except (json.JSONDecodeError, TypeError):
                 pass
 
+        return await self.ingest_content(
+            title=title,
+            url=url,
+            content=extracted,
+            author=author,
+            notes=notes,
+            pillar_override=pillar_override,
+            trust_tier="curated" if notes else "untrusted",
+            dedup=False,  # already checked above
+        )
+
+    async def ingest_content(
+        self,
+        title: str,
+        content: str,
+        url: str | None = None,
+        author: str | None = None,
+        notes: str | None = None,
+        pillar_override: list[str] | None = None,
+        trust_tier: str = "untrusted",
+        dedup: bool = True,
+    ) -> dict:
+        """Run the classify → quarantine → store → version pipeline on content
+        already in hand (e.g. a Google Doc exported by an ingestion source whose
+        URL is auth-gated and can't be re-fetched by the public-URL fetcher).
+        Absorbed external-system content defaults to the untrusted tier, so it
+        passes the review gate before it can be consolidated."""
+        if dedup and url and await self.store.url_exists(url):
+            return {"error": "URL already exists in knowledge base", "url": url}
+        if not content:
+            return {"error": "No content to ingest", "url": url}
+
         # 3. LLM classify + summarize
         prompt = CLASSIFY_AND_SUMMARIZE.format(
-            title=title, content=extracted[:6000]
+            title=title, content=content[:6000]
         )
         analysis = await self.llm.complete_structured(
             messages=[{"role": "user", "content": prompt}],
@@ -102,22 +134,23 @@ class IngestionService:
 
         # 4. Quarantine screen: injection markers, oversize, off-domain content is
         # stored for audit but never consolidated until an operator clears it.
-        reason = quarantine_reason(extracted, pillars=analysis.get("pillars"))
+        reason = quarantine_reason(content, pillars=analysis.get("pillars"))
 
         # 5. Store in knowledge base (embedding happens inside add_source).
-        # Trust tier: an annotated item passed through human hands (curated);
-        # a bare URL or feed item is untrusted until the review gate clears it.
+        # Trust tier is decided by the caller: an annotated item passed through
+        # human hands is curated; a bare URL, feed item, or absorbed document is
+        # untrusted until the review gate clears it.
         item = await self.store.add_source(
             title=title,
             url=url,
-            content=extracted,
+            content=content,
             summary=summary,
             pillar=pillars,
             source_type=source_type,
             author=author,
             your_notes=notes,
             tags=tags,
-            trust_tier="curated" if notes else "untrusted",
+            trust_tier=trust_tier,
             quarantined=reason is not None,
         )
         if reason:
@@ -130,7 +163,7 @@ class IngestionService:
             entity_type="source_content",
             entity_id=item.id,
             content_snapshot={
-                "title": title, "url": url, "summary": summary, "content": extracted,
+                "title": title, "url": url, "summary": summary, "content": content,
                 "pillar": pillars, "source_type": source_type, "tags": tags,
             },
             change_type="create",
