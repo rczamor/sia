@@ -120,10 +120,13 @@ async def test_non_http_url_is_rejected(client, webhook_secret, memory_queue):
 
 
 async def test_non_ascii_token_is_401_not_500(client, webhook_secret):
-    """A non-ASCII token must compare false cleanly, not raise inside compare_digest."""
+    """An attacker can put raw bytes 0x80-0xFF in the header; Starlette decodes them
+    latin-1 into a non-ASCII str. compare_digest on plain str would raise (→500), so
+    the token must be compared as bytes. Sent as raw bytes because an HTTP client
+    can't transmit a non-ASCII *str* header value."""
     response = await client.post(
         "/api/ingest/webhook",
         json={"title": "x", "content": "y"},
-        headers={"X-Sia-Webhook-Token": "tökén"},
+        headers={"X-Sia-Webhook-Token": "tökén".encode("latin-1")},
     )
     assert response.status_code == 401
