@@ -3,7 +3,7 @@ import re
 
 from fastapi import APIRouter, Depends, Header, HTTPException
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -18,6 +18,13 @@ from app.runtime import get_runtime
 router = APIRouter(prefix="/api/ingest", tags=["ingestion"])
 
 URL_IN_TEXT_RE = re.compile(r"https?://[^\s<>|]+")
+
+
+def _token_matches(provided: str, expected: str) -> bool:
+    """Constant-time webhook-token comparison. Encode to bytes first:
+    hmac.compare_digest raises TypeError on non-ASCII str inputs, which would
+    otherwise surface a probing request as a 500 instead of a clean 401."""
+    return hmac.compare_digest(provided.encode("utf-8"), expected.encode("utf-8"))
 
 
 async def _get_ingestion_service(db: AsyncSession) -> IngestionService:
@@ -77,7 +84,7 @@ async def ingest_from_slack(
     remaining text is stored as an owner-tier thought."""
     if not settings.slack_webhook_secret:
         raise HTTPException(status_code=503, detail="Slack ingestion not configured")
-    if not hmac.compare_digest(x_sia_slack_token, settings.slack_webhook_secret):
+    if not _token_matches(x_sia_slack_token, settings.slack_webhook_secret):
         raise HTTPException(status_code=401, detail="Invalid webhook token")
 
     # Order matters for idempotency against Slack's webhook retries: do the
@@ -139,6 +146,16 @@ class WebhookIngestRequest(BaseModel):
     source: str | None = Field(default=None, max_length=200)
     author: str | None = Field(default=None, max_length=200)
 
+    @field_validator("url")
+    @classmethod
+    def _http_url_only(cls, v: str | None) -> str | None:
+        # Even in content-mode (where the URL is stored, not fetched) reject
+        # non-http schemes so junk like "javascript:..." can't be persisted as a
+        # source URL. The url-mode path additionally runs assert_safe_url.
+        if v is not None and not v.startswith(("http://", "https://")):
+            raise ValueError("url must be an http(s) URL")
+        return v
+
 
 @router.post("/webhook", status_code=202)
 async def ingest_from_webhook(
@@ -155,7 +172,7 @@ async def ingest_from_webhook(
     for fetch+extract like /api/ingest/url instead."""
     if not settings.ingest_webhook_secret:
         raise HTTPException(status_code=503, detail="Ingestion webhook not configured")
-    if not hmac.compare_digest(x_sia_webhook_token, settings.ingest_webhook_secret):
+    if not _token_matches(x_sia_webhook_token, settings.ingest_webhook_secret):
         raise HTTPException(status_code=401, detail="Invalid webhook token")
 
     notes = f"via {request.source}" if request.source else None

@@ -93,3 +93,23 @@ async def test_requires_content_or_url(client, webhook_secret):
         headers={"X-Sia-Webhook-Token": webhook_secret},
     )
     assert response.status_code == 400
+
+
+async def test_non_http_url_is_rejected(client, webhook_secret, memory_queue):
+    response = await client.post(
+        "/api/ingest/webhook",
+        json={"title": "x", "content": "y", "url": "javascript:alert(1)"},
+        headers={"X-Sia-Webhook-Token": webhook_secret},
+    )
+    assert response.status_code == 422
+    assert not _tasks(memory_queue, "ingest_content")
+
+
+async def test_non_ascii_token_is_401_not_500(client, webhook_secret):
+    """A non-ASCII token must compare false cleanly, not raise inside compare_digest."""
+    response = await client.post(
+        "/api/ingest/webhook",
+        json={"title": "x", "content": "y"},
+        headers={"X-Sia-Webhook-Token": "tökén"},
+    )
+    assert response.status_code == 401

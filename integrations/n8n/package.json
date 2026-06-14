@@ -6,9 +6,9 @@
   "license": "MIT",
   "homepage": "https://github.com/rczamor/sia",
   "repository": { "type": "git", "url": "https://github.com/rczamor/sia.git" },
-  "main": "index.js",
+  "main": "dist/index.js",
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && gulp build:icons",
     "dev": "tsc --watch",
     "lint": "eslint nodes credentials"
   },
@@ -23,6 +23,7 @@
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
+    "gulp": "^5.0.0",
     "n8n-workflow": "*",
     "typescript": "^5.4.0"
   }
