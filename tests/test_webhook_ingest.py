@@ -76,6 +76,20 @@ async def test_url_only_queues_ingest_url(client, webhook_secret, memory_queue):
     assert urls == ["https://93.184.216.34/paper"]
 
 
+async def test_url_mode_stays_untrusted_even_with_source(client, webhook_secret, memory_queue):
+    """A caller-supplied `source` becomes a provenance note, but must NOT elevate
+    webhook intake from untrusted to curated (notes-implies-curated is owner-only)."""
+    response = await client.post(
+        "/api/ingest/webhook",
+        json={"title": "A paper", "url": "https://93.184.216.34/paper", "source": "zapier:rss"},
+        headers={"X-Sia-Webhook-Token": webhook_secret},
+    )
+    assert response.status_code == 202
+    job = _tasks(memory_queue, "ingest_url")[0]
+    assert job["args"]["trust_tier"] == "untrusted"
+    assert job["args"]["notes"] == "via zapier:rss"
+
+
 async def test_internal_url_is_refused(client, webhook_secret, memory_queue):
     response = await client.post(
         "/api/ingest/webhook",

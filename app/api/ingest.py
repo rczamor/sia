@@ -192,7 +192,11 @@ async def ingest_from_webhook(
             assert_safe_url(request.url)
         except UnsafeURLError as exc:
             raise HTTPException(status_code=400, detail=f"URL refused: {exc}")
-        job_id = await ingest_url_task.defer_async(url=request.url, notes=notes)
+        # Pin untrusted: the webhook can't vouch for a caller-supplied source, so
+        # the provenance note must not elevate the item to the curated tier.
+        job_id = await ingest_url_task.defer_async(
+            url=request.url, notes=notes, trust_tier="untrusted"
+        )
         return {"status": "queued", "job_id": job_id, "mode": "url"}
 
     raise HTTPException(status_code=400, detail="Provide content or url")

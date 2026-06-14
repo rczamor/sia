@@ -40,6 +40,7 @@ class IngestionService:
         url: str,
         notes: str | None = None,
         pillar_override: list[str] | None = None,
+        trust_tier: str | None = None,
     ) -> dict:
         # 1. Dedup check
         if await self.store.url_exists(url):
@@ -83,7 +84,10 @@ class IngestionService:
             author=author,
             notes=notes,
             pillar_override=pillar_override,
-            trust_tier="curated" if notes else "untrusted",
+            # Owner-supplied notes (via /api/ingest/url) imply curation; callers
+            # that can't vouch for the source (the webhook) pass trust_tier
+            # explicitly so a self-asserted provenance note can't elevate tier.
+            trust_tier=trust_tier if trust_tier is not None else ("curated" if notes else "untrusted"),
             dedup=False,  # already checked above
         )
 

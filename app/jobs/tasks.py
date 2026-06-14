@@ -18,7 +18,10 @@ TRANSIENT_RETRY = RetryStrategy(max_attempts=3, exponential_wait=2)
 
 @job_queue.task(name="ingest_url", queue="ingestion", retry=TRANSIENT_RETRY)
 async def ingest_url_task(
-    url: str, notes: str | None = None, pillar_override: list[str] | None = None
+    url: str,
+    notes: str | None = None,
+    pillar_override: list[str] | None = None,
+    trust_tier: str | None = None,
 ) -> dict:
     from app.database import async_session
     from app.runtime import get_runtime
@@ -26,7 +29,9 @@ async def ingest_url_task(
     runtime = await get_runtime()
     async with async_session() as db:
         service = runtime.ingestion_service(db)
-        result = await service.ingest_url(url=url, notes=notes, pillar_override=pillar_override)
+        result = await service.ingest_url(
+            url=url, notes=notes, pillar_override=pillar_override, trust_tier=trust_tier
+        )
     if "error" in result:
         # Dedup and refused URLs are terminal outcomes, not retryable failures.
         logger.info("ingest_url(%s) did not store: %s", url, result["error"])
