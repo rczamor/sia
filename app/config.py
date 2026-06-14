@@ -28,6 +28,11 @@ class Settings(BaseSettings):
     feedly_access_token: str = ""
     feedly_board_id: str = ""
 
+    # Google Drive / Docs (source absorption — see app/plugins/ingestion/gdocs.py).
+    # An OAuth access token with drive.readonly scope; optional folder to scope to.
+    google_drive_access_token: str = ""
+    google_drive_folder_id: str = ""
+
     # CORS: comma-separated browser origins allowed to call the API (empty = none;
     # MCP/REST consumers are server-side and need no CORS)
     cors_origins: str = ""

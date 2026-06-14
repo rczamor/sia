@@ -339,6 +339,27 @@ class ContextBuilds(Base):
     )
 
 
+class ContextBypasses(Base):
+    """A consumer told us it used a source OUTSIDE Sia for a goal. The bypass
+    ledger turns 'is Sia actually the first stop?' into a measurable number and
+    surfaces the coverage gaps worth closing."""
+
+    __tablename__ = "context_bypasses"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    principal_id: Mapped[str] = mapped_column(String(100), nullable=False)
+    goal: Mapped[str] = mapped_column(Text, nullable=False)
+    source: Mapped[str] = mapped_column(String(500), nullable=False)
+    reason: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+    __table_args__ = (
+        Index("ix_context_bypasses_principal", "principal_id", "created_at"),
+    )
+
+
 class AiConfig(Base):
     __tablename__ = "ai_config"
 

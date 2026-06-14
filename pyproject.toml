@@ -30,6 +30,7 @@ openrouter = "app.plugins.llm.openrouter:OpenRouterLLMPlugin"
 ollama = "app.plugins.embeddings.ollama:OllamaEmbeddingsPlugin"
 langfuse = "app.plugins.llmops.langfuse:LangfusePlugin"
 feedly = "app.plugins.ingestion.feedly:FeedlyIngestion"
+gdocs = "app.plugins.ingestion.gdocs:GoogleDocsIngestion"
 
 [project.optional-dependencies]
 dev = [

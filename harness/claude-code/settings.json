@@ -1,0 +1,15 @@
+{
+  "//": "Drop into your project's .claude/settings.json (or merge the hooks block). Make the hook executable: chmod +x harness/claude-code/sia-first-hook.sh. Adjust the command path to where you place the script.",
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$CLAUDE_PROJECT_DIR/harness/claude-code/sia-first-hook.sh"
+          }
+        ]
+      }
+    ]
+  }
+}
