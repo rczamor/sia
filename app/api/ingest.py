@@ -3,7 +3,7 @@ import re
 
 from fastapi import APIRouter, Depends, Header, HTTPException
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -11,7 +11,7 @@ from app.data.ingestion import IngestionService
 from app.data.knowledge_store import KnowledgeStore
 from app.data.url_safety import UnsafeURLError, assert_safe_url
 from app.database import get_db
-from app.jobs.tasks import ingest_url_task
+from app.jobs.tasks import ingest_content_task, ingest_url_task
 from app.models.schemas import IngestArtifactRequest, IngestThoughtRequest, IngestURLRequest
 from app.runtime import get_runtime
 
@@ -126,6 +126,59 @@ async def _store_slack_thought_idempotent(db: AsyncSession, content: str) -> str
     svc = await _get_ingestion_service(db)
     result = await svc.ingest_thought(content=content)
     return result["id"]
+
+
+class WebhookIngestRequest(BaseModel):
+    """One generic inbound payload. An automation platform (Zapier / n8n / Make)
+    is the connector layer: it authenticates to the source, pulls the data, and
+    maps it onto these fields — so Sia needs no per-source integration code."""
+
+    title: str = Field(min_length=1, max_length=500)
+    content: str = Field(default="", max_length=500_000)
+    url: str | None = Field(default=None, max_length=2000)
+    source: str | None = Field(default=None, max_length=200)
+    author: str | None = Field(default=None, max_length=200)
+
+
+@router.post("/webhook", status_code=202)
+async def ingest_from_webhook(
+    request: WebhookIngestRequest,
+    x_sia_webhook_token: str = Header(default=""),
+):
+    """Generic ingestion webhook for automation platforms. Authenticated by a
+    shared secret (X-Sia-Webhook-Token); content lands at the untrusted tier and
+    passes the review gate before it can be consolidated, exactly like other
+    machine-fed intake.
+
+    Provide `content` for sources the platform already fetched (auth-gated docs,
+    Slack messages, form fields). If only a public `url` is given, it is queued
+    for fetch+extract like /api/ingest/url instead."""
+    if not settings.ingest_webhook_secret:
+        raise HTTPException(status_code=503, detail="Ingestion webhook not configured")
+    if not hmac.compare_digest(x_sia_webhook_token, settings.ingest_webhook_secret):
+        raise HTTPException(status_code=401, detail="Invalid webhook token")
+
+    notes = f"via {request.source}" if request.source else None
+
+    if request.content.strip():
+        job_id = await ingest_content_task.defer_async(
+            title=request.title,
+            content=request.content,
+            url=request.url,
+            author=request.author,
+            notes=notes,
+        )
+        return {"status": "queued", "job_id": job_id, "mode": "content"}
+
+    if request.url:
+        try:
+            assert_safe_url(request.url)
+        except UnsafeURLError as exc:
+            raise HTTPException(status_code=400, detail=f"URL refused: {exc}")
+        job_id = await ingest_url_task.defer_async(url=request.url, notes=notes)
+        return {"status": "queued", "job_id": job_id, "mode": "url"}
+
+    raise HTTPException(status_code=400, detail="Provide content or url")
 
 
 @router.post("/expertise")
