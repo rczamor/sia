@@ -34,6 +34,7 @@ PUBLIC_PREFIXES = (
     "/static/",
     "/mcp",  # enforces its own key auth
     "/api/ingest/slack",  # enforces its own webhook token
+    "/api/ingest/webhook",  # enforces its own webhook token
 )
 # Exact paths the anonymous visitor principal may reach. Matched exactly (not by
 # prefix) so sibling routes like /api/context/builds — the per-principal audit

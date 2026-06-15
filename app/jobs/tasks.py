@@ -18,7 +18,10 @@ TRANSIENT_RETRY = RetryStrategy(max_attempts=3, exponential_wait=2)
 
 @job_queue.task(name="ingest_url", queue="ingestion", retry=TRANSIENT_RETRY)
 async def ingest_url_task(
-    url: str, notes: str | None = None, pillar_override: list[str] | None = None
+    url: str,
+    notes: str | None = None,
+    pillar_override: list[str] | None = None,
+    trust_tier: str | None = None,
 ) -> dict:
     from app.database import async_session
     from app.runtime import get_runtime
@@ -26,7 +29,9 @@ async def ingest_url_task(
     runtime = await get_runtime()
     async with async_session() as db:
         service = runtime.ingestion_service(db)
-        result = await service.ingest_url(url=url, notes=notes, pillar_override=pillar_override)
+        result = await service.ingest_url(
+            url=url, notes=notes, pillar_override=pillar_override, trust_tier=trust_tier
+        )
     if "error" in result:
         # Dedup and refused URLs are terminal outcomes, not retryable failures.
         logger.info("ingest_url(%s) did not store: %s", url, result["error"])
@@ -42,10 +47,12 @@ async def ingest_content_task(
     content: str,
     url: str | None = None,
     author: str | None = None,
+    notes: str | None = None,
     trust_tier: str = "untrusted",
 ) -> dict:
-    """Ingest content already in hand (auth-gated sources like Google Docs whose
-    export URL the public-URL fetcher can't re-fetch)."""
+    """Ingest content already in hand — e.g. an automation platform (Zapier/n8n)
+    POSTing to /api/ingest/webhook, where the source is auth-gated and the
+    public-URL fetcher can't re-fetch it."""
     from app.database import async_session
     from app.runtime import get_runtime
 
@@ -53,7 +60,8 @@ async def ingest_content_task(
     async with async_session() as db:
         service = runtime.ingestion_service(db)
         result = await service.ingest_content(
-            title=title, content=content, url=url, author=author, trust_tier=trust_tier
+            title=title, content=content, url=url, author=author, notes=notes,
+            trust_tier=trust_tier,
         )
     if "error" in result:
         logger.info("ingest_content(%s) did not store: %s", title, result["error"])
@@ -130,36 +138,6 @@ async def feedly_poll(timestamp: int | None = None) -> int:
         await ingest_url_task.defer_async(url=item.url)
         enqueued += 1
     logger.info("feedly_poll enqueued %d items", enqueued)
-    return enqueued
-
-
-@job_queue.periodic(cron="*/15 * * * *")
-@job_queue.task(name="gdocs_poll", queue="ingestion", retry=TRANSIENT_RETRY)
-async def gdocs_poll(timestamp: int | None = None) -> int:
-    """Absorb Google Docs INTO Sia: list docs modified since the last poll and
-    enqueue one content-ingest job each. Docs flow into the data layer so the
-    only path to them in any harness is sia_build_context — there is no sibling
-    connector to reach for first."""
-    from app.models.enums import PluginCategory
-    from app.runtime import get_runtime
-
-    runtime = await get_runtime()
-    gdocs = runtime.plugins.get("gdocs")
-    if gdocs is None or gdocs.category != PluginCategory.INGESTION:
-        logger.info("gdocs plugin not enabled; skipping poll")
-        return 0
-
-    # Overlap the poll interval slightly so an edit landing on the boundary is
-    # not missed; dedup on the ingest side converges duplicate enqueues.
-    since = (datetime.now(timezone.utc) - timedelta(minutes=20)).strftime("%Y-%m-%dT%H:%M:%SZ")
-    items = await gdocs.provider.fetch_new_items(since=since)
-    enqueued = 0
-    for item in items:
-        await ingest_content_task.defer_async(
-            title=item.title, content=item.content, url=item.url, author=item.author
-        )
-        enqueued += 1
-    logger.info("gdocs_poll enqueued %d items", enqueued)
     return enqueued
 
 

@@ -11,7 +11,7 @@ for its category. Ship one in any pip package — no core changes.
 | `llm` | `LLMProvider` (`complete`, `complete_structured`) | anthropic, openrouter |
 | `embeddings` | `EmbeddingProvider` (`embed`, `embed_batch`, `dimensions`) | ollama |
 | `llmops` | `LLMOpsProvider` (`trace`, `get_prompt`, `score`) | langfuse |
-| `ingestion` | `IngestionSource` (`fetch_new_items`) | feedly, gdocs |
+| `ingestion` | `IngestionSource` (`fetch_new_items`) | feedly |
 | `store_backend` | `ContextStoreBackend` (`app.context.store.gitstore`) | local git |
 
 ## Minimal example
@@ -72,10 +72,9 @@ Then point an operation at it in `ai_config`:
 - Providers must be safe for concurrent use from multiple requests.
 - LLM providers are used for Sia's *internal* context operations (classification,
   consolidation, synthesis). Sia core never generates end-user content.
-- **Ingestion sources with public URLs** (e.g. `feedly`) can enqueue
-  `ingest_url_task` per item and let the SSRF-guarded fetcher re-fetch. **Sources
-  whose content is auth-gated** (e.g. `gdocs`, where the export URL needs a
-  bearer token) should pass the already-fetched text to `ingest_content_task`
-  instead — see `app/plugins/ingestion/gdocs.py` and the `gdocs_poll` task.
-  Absorbing a source this way makes it reachable in any harness only through
-  `sia_build_context`; see [default-context-source.md](default-context-source.md).
+- **Pull vs. push intake.** An `IngestionSource` plugin (e.g. `feedly`) is for
+  feeds Sia polls and re-fetches itself via `ingest_url_task`. For everything an
+  automation platform already connects to, prefer the push model: the
+  [ingestion webhook](ingestion-webhook.md) (`/api/ingest/webhook`) accepts
+  already-fetched content via `ingest_content_task`, so you don't write a plugin
+  per source. See [default-context-source.md](default-context-source.md).

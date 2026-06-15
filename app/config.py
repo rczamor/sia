@@ -28,10 +28,10 @@ class Settings(BaseSettings):
     feedly_access_token: str = ""
     feedly_board_id: str = ""
 
-    # Google Drive / Docs (source absorption — see app/plugins/ingestion/gdocs.py).
-    # An OAuth access token with drive.readonly scope; optional folder to scope to.
-    google_drive_access_token: str = ""
-    google_drive_folder_id: str = ""
+    # Generic ingestion webhook (source absorption via an automation platform —
+    # Zapier / n8n / Make POST normalized payloads to /api/ingest/webhook). Shared
+    # secret sent as the X-Sia-Webhook-Token header; empty disables the endpoint.
+    ingest_webhook_secret: str = ""
 
     # CORS: comma-separated browser origins allowed to call the API (empty = none;
     # MCP/REST consumers are server-side and need no CORS)

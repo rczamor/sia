@@ -1,0 +1,19 @@
+{
+  "name": "sia-zapier",
+  "version": "1.0.0",
+  "description": "Zapier integration for Sia — push content into your Context Engine",
+  "repository": "https://github.com/rczamor/sia",
+  "license": "MIT",
+  "main": "index.js",
+  "scripts": {
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=18",
+    "npm": ">=8"
+  },
+  "dependencies": {
+    "zapier-platform-core": "16.2.0"
+  },
+  "private": true
+}

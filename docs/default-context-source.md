@@ -13,27 +13,32 @@ with very different amounts of control at each. Sia ships all three.
 ## Layer 1 — Own the sources, don't compete with them
 
 The strongest move is structural: stop letting an external system (Google Docs,
-Slack, a feed) be a *sibling* connector and make it a Sia **intake adapter**. When
-those sources flow *into* Sia's data layer, there is no separate tool in the
-harness to reach for — the only path to that knowledge is `sia_build_context`. You
-don't win the tool-choice fight; you remove the other tool from the board. This is
-the only approach that generalises across *every* harness, because it asks nothing
-of the harness.
+Slack, a feed) be a *sibling* connector and make it flow *into* Sia's data layer.
+When the knowledge lives in Sia, there is no separate tool in the harness to reach
+for — the only path to it is `sia_build_context`. You don't win the tool-choice
+fight; you remove the other tool from the board. This is the only approach that
+generalises across *every* harness, because it asks nothing of the harness.
 
-- Adapters implement the `IngestionSource` protocol (`fetch_new_items`); see
-  [plugins.md](plugins.md). Bundled examples: `feedly`, and `gdocs`
-  (`app/plugins/ingestion/gdocs.py`) for Google Docs absorption.
-- A periodic poll enqueues each new/changed item for ingestion; absorbed
-  external-system content enters at the **untrusted** trust tier, so it passes the
-  human-reviewed merge gate before it can be consolidated (see
-  [threat-model.md](threat-model.md)).
+Rather than build a connector per source, let an **automation platform be the
+connector layer**. Zapier, n8n, and Make already have thousands of source
+integrations; they authenticate, pull, and POST a normalized payload to Sia's one
+generic [ingestion webhook](ingestion-webhook.md) (`/api/ingest/webhook`). First-class
+helpers ship in [`integrations/`](../integrations) (a Zapier app and an n8n node),
+but any tool that can send an authenticated HTTP POST works.
+
+- Webhook intake is machine-fed, so it enters at the **untrusted** trust tier: it
+  is classified and quarantine-screened on the way in and passes the human-reviewed
+  merge gate before it can be consolidated (see [threat-model.md](threat-model.md)).
+- For pull-style feeds Sia can fetch itself, the `IngestionSource` plugin protocol
+  (`fetch_new_items`) still exists — `feedly` is the bundled example. Prefer the
+  webhook for anything an automation platform already connects to.
 
 **The freshness caveat (the real cost):** ingestion is eventually consistent. A doc
-edited seconds ago is not yet consolidated, so a harness asking about it has a
-legitimate reason to look elsewhere. Keep the absorption window small (tune the
-poll interval) and lean on the labeled raw fallback to cover the gap. That window
-is the price of absorption versus a live connector — it is not a bug, but it is the
-thing to manage.
+edited seconds ago isn't consolidated yet, so a harness asking about it has a
+legitimate reason to look elsewhere. Keep the window small (trigger the automation
+on change, not on a slow poll) and lean on the labeled raw fallback to cover the
+gap. That window is the price of absorption versus a live connector — not a bug,
+but the thing to manage.
 
 ## Layer 2 — Enforce at the harness's real control points
 
