@@ -25,6 +25,8 @@ secrets**.
 | `CORS_ORIGINS` | no | (none) | Browser origins allowed to call the API |
 | `CSP_HEADER` | no | built-in | Override the admin Content-Security-Policy (default is `default-src 'self'`; all assets are vendored) |
 | `PUBLIC_BASE_URL` | no | — | Canonical external URL (e.g. `https://sia.example.com`); referenced by connector guides |
+| `OWNER_TIMEZONE` | no | UTC | IANA timezone (e.g. `America/Los_Angeles`) for the session-orientation block at the top of every build. Unknown names fall back to UTC |
+| `OWNER_LOCATION` | no | — | Free-text location shown in the orientation block; served only to private-trusted principals. Omitted if blank |
 | `SESSION_COOKIE_SECURE` | no | **true** | Secure flag on the session cookie. Disable only for plain-http dev on a non-localhost host |
 | `HSTS_ENABLED` | no | **true** | Send `Strict-Transport-Security`. Disable only for plain-http dev |
 | `HSTS_MAX_AGE` | no | 63072000 | HSTS max-age in seconds (two years) |

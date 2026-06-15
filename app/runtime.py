@@ -110,8 +110,15 @@ class Runtime:
         return StoreIndexer(db, self.context_store, self.embedder)
 
     def context_builder(self, db: AsyncSession) -> ContextBuilder:
+        from app.config import settings
+
         return ContextBuilder(
-            db, self.context_store, self.embedder, search_service=self.search_service(db)
+            db,
+            self.context_store,
+            self.embedder,
+            search_service=self.search_service(db),
+            owner_timezone=settings.owner_timezone,
+            owner_location=settings.owner_location,
         )
 
     async def build_context(

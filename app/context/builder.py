@@ -25,6 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.context.graph import GraphService
 from app.context.index import freshness_decay
+from app.context.orientation import Orientation, build_orientation
 from app.context.principals import Principal
 from app.context.store.documents import estimate_tokens
 from app.context.store.gitstore import GitContextStore
@@ -73,6 +74,7 @@ class ContextArtifact:
     skills: list[SkillStub] = field(default_factory=list)
     cautions: list[str] = field(default_factory=list)
     fallback: list[dict] = field(default_factory=list)
+    orientation: Orientation | None = None
     coverage: float = 0.0
     tokens_used: int = 0
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
@@ -85,6 +87,7 @@ class ContextArtifact:
             "budget_tokens": self.budget_tokens,
             "tokens_used": self.tokens_used,
             "coverage": round(self.coverage, 3),
+            "orientation": self.orientation.to_dict() if self.orientation else None,
             "sections": [
                 {
                     "path": s.path,
@@ -118,6 +121,8 @@ class ContextArtifact:
             f"{self.tokens_used}/{self.budget_tokens} tokens; coverage {self.coverage:.2f}._",
             "",
         ]
+        if self.orientation:
+            lines += [self.orientation.to_markdown(), ""]
         if self.cautions:
             lines += ["## Cautions", ""]
             lines += [f"- {c}" for c in self.cautions]
@@ -150,11 +155,22 @@ class ContextBuilder:
         store: GitContextStore,
         embedder: EmbeddingProvider,
         search_service: SearchService | None = None,
+        owner_timezone: str | None = None,
+        owner_location: str | None = None,
     ):
         self.db = db
         self.store = store
         self.embedder = embedder
         self.search_service = search_service
+        # Orientation config; default to settings so callers that don't pass it
+        # (e.g. tests) still get a sane UTC orientation.
+        if owner_timezone is None or owner_location is None:
+            from app.config import settings
+
+            owner_timezone = owner_timezone if owner_timezone is not None else settings.owner_timezone
+            owner_location = owner_location if owner_location is not None else settings.owner_location
+        self.owner_timezone = owner_timezone
+        self.owner_location = owner_location
 
     async def build(
         self,
@@ -167,6 +183,13 @@ class ContextBuilder:
         budget = min(budget_tokens or principal.token_budget, principal.token_budget)
         artifact = ContextArtifact(
             build_id=uuid.uuid4(), goal=goal, principal_id=principal.id, budget_tokens=budget
+        )
+        # Orientation: live date/time always; location only for private-trusted
+        # principals, since it's personal.
+        artifact.orientation = build_orientation(
+            self.owner_timezone,
+            self.owner_location,
+            include_location="private" in principal.allowed_visibilities,
         )
 
         goal_vector = await self.embedder.embed(goal)
