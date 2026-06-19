@@ -62,6 +62,12 @@ shipped hook takes the robust path of re-injecting the directive each turn.
 
 Behaviour is reinforced by payoff, and you can't improve what you can't see.
 
+- **Session orientation:** every build opens with a *Session orientation* block —
+  the operator's current date, time, timezone, and (for private-trusted principals)
+  location. Harnesses routinely misjudge the date and ignore the operator's
+  timezone; calling `sia_build_context` first fixes that grounding for free.
+  Configure it with `OWNER_TIMEZONE` / `OWNER_LOCATION` (see
+  [configuration.md](configuration.md)).
 - **Feedback loop:** `sia_flag(build_id, useful)` feeds the citation-use ledger that
   consolidation prioritises by — so context that gets used gets better.
 - **Bypass ledger:** `sia_record_bypass(goal, source, reason)` (REST:

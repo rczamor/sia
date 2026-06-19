@@ -45,6 +45,14 @@ class Settings(BaseSettings):
     # Informational: referenced by connector guides and operational docs.
     public_base_url: str = ""
 
+    # Session orientation served at the top of every context build so harnesses
+    # ground themselves in the operator's *now* and *where*. The timezone is an
+    # IANA name (e.g. America/Los_Angeles); date/time are computed live. Location
+    # is free text and, being personal, is only served to private-trusted
+    # principals. Empty timezone defaults to UTC; empty location is omitted.
+    owner_timezone: str = "UTC"
+    owner_location: str = ""
+
     # Session-cookie / HSTS posture. Production-safe by default: the session
     # cookie always carries Secure and HSTS is always sent, so a proxy that
     # doesn't forward X-Forwarded-Proto can't silently downgrade the admin
