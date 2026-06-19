@@ -65,7 +65,7 @@ cryptography==49.0.0
     #   python-jose
 cyclonedx-python-lib==11.10.0
     # via pip-audit
-dateparser==1.4.0
+dateparser==1.4.1
     # via htmldate
 defusedxml==0.7.1
     # via py-serializable
