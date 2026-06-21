@@ -33,6 +33,10 @@
         <h2>{{ health.builds.flagged_useful_7d }}</h2>
         <small>Flagged useful (7d)</small>
     </article>
+    <article class="stat-card">
+        <h2>{% if health.bypasses.sia_first_rate_7d is not none %}{{ "%.0f"|format(health.bypasses.sia_first_rate_7d * 100) }}%{% else %}—{% endif %}</h2>
+        <small>Sia-first rate (7d)</small>
+    </article>
 </div>
 
 <section>
@@ -66,6 +70,22 @@
             </tr>
         {% else %}
             <tr><td colspan="4">Store is empty</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</section>
+
+<section>
+    <h2>Bypassed sources (30d)</h2>
+    <p><small>Where consumers went outside Sia — the coverage gaps worth closing
+    (often by absorbing the source as an ingestion adapter).</small></p>
+    <table>
+        <thead><tr><th>source</th><th>times</th></tr></thead>
+        <tbody>
+        {% for s in health.bypasses.top_sources_30d %}
+            <tr><td>{{ s.source }}</td><td>{{ s.n }}</td></tr>
+        {% else %}
+            <tr><td colspan="2">No bypasses recorded — Sia covered everything asked, or consumers aren't reporting them.</td></tr>
         {% endfor %}
         </tbody>
     </table>

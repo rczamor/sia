@@ -68,9 +68,11 @@ Return JSON:
   "relations": [{{"subject": "<entity name>", "relation": "...",
                   "object": "<entity name>"}}]}}"""
 
-DEEP_SKILL = """You are Sia's deep consolidation clock synthesizing a SKILL — consolidated
+DEEP_SKILL = """You are Sia's deep consolidation clock synthesizing a SKILL: consolidated
 procedural knowledge (how to do something), the counterpart to topics' declarative
-knowledge.
+knowledge. The output must follow Sia's Memento-Skills-style contract: a tight
+trigger, progressive disclosure, concrete procedure steps, failure modes, and
+evidence links.
 
 Evidence of repeated practice:
 Expertise artifacts:
@@ -80,7 +82,7 @@ Recent operation statistics (lineage):
 {lineage_stats}
 
 Draft ONE skill that this system's owner demonstrably uses. It must be a concrete,
-repeatable procedure — not a platitude. Return JSON:
+repeatable procedure, not a platitude. Return JSON:
 {{
   "slug": "kebab-case-name",
   "title": "...",

@@ -4,6 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
+from app.api.chat import router as chat_router
 from app.api.config import router as config_router
 from app.api.context import router as context_router
 from app.api.ingest import router as ingest_router
@@ -63,6 +64,7 @@ app.include_router(ingest_router)
 app.include_router(knowledge_router)
 app.include_router(context_router)
 app.include_router(config_router)
+app.include_router(chat_router)
 
 app.include_router(gateway_router)
 

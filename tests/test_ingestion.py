@@ -6,6 +6,20 @@ from app.data.lineage import LineageService, TrackedLLMProvider
 from tests.fakes import FakeEmbedding, FakeLLM
 
 
+class PromptOps:
+    def __init__(self, prompts):
+        self.prompts = prompts
+
+    async def trace(self, **kwargs):
+        return None
+
+    async def get_prompt(self, name: str, label: str = "production") -> str | None:
+        return self.prompts.get(name)
+
+    async def score(self, *args, **kwargs):
+        pass
+
+
 @pytest.fixture
 def fake_ingestion(monkeypatch):
     """Route the ingestion API through fake LLM + embedding providers."""
@@ -54,6 +68,31 @@ async def test_ingest_thought_records_lineage(client, fake_ingestion, db_session
 
     op = (await db_session.execute(text("SELECT operation_type FROM process_lineage"))).scalar()
     assert op == "classify"
+
+
+async def test_ingest_content_uses_managed_source_prompt(db_session):
+    fake_llm = FakeLLM()
+    service = IngestionService(
+        db_session,
+        TrackedLLMProvider(
+            fake_llm,
+            LineageService(db_session),
+            llmops=PromptOps(
+                {"source_analyst": "Managed prompt title={title} content={content}"}
+            ),
+        ),
+        FakeEmbedding(),
+    )
+
+    await service.ingest_content(
+        title="Managed title",
+        content="Managed body",
+        trust_tier="owner",
+        dedup=False,
+    )
+
+    prompt = fake_llm.calls[0]["messages"][0]["content"]
+    assert "Managed prompt title=Managed title content=Managed body" in prompt
 
 
 async def test_search_finds_ingested_artifact(client, fake_ingestion, db_session):

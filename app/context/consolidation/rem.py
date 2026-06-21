@@ -72,11 +72,14 @@ class RemClock:
             claims = document.section("Key claims")
             if not claims:
                 continue
+            prompt_template = await self.llm.prompt("rem_gist", REM_GIST)
             response = await self.llm.complete_structured(
                 messages=[
                     {
                         "role": "user",
-                        "content": REM_GIST.format(title=row.title or row.path, claims=claims),
+                        "content": prompt_template.format(
+                            title=row.title or row.path, claims=claims
+                        ),
                     }
                 ],
                 schema={"gist": "string"},
@@ -239,11 +242,14 @@ class RemClock:
             claims_b = self.serializer.loads(peer.path, content_b).section("Key claims")
             if not claims_a or not claims_b:
                 continue
+            prompt_template = await self.llm.prompt(
+                "rem_contradictions", REM_CONTRADICTIONS
+            )
             response = await self.llm.complete_structured(
                 messages=[
                     {
                         "role": "user",
-                        "content": REM_CONTRADICTIONS.format(
+                        "content": prompt_template.format(
                             path_a=row.path, claims_a=claims_a,
                             path_b=peer.path, claims_b=claims_b,
                         ),

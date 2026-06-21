@@ -72,3 +72,9 @@ Then point an operation at it in `ai_config`:
 - Providers must be safe for concurrent use from multiple requests.
 - LLM providers are used for Sia's *internal* context operations (classification,
   consolidation, synthesis). Sia core never generates end-user content.
+- **Pull vs. push intake.** An `IngestionSource` plugin (e.g. `feedly`) is for
+  feeds Sia polls and re-fetches itself via `ingest_url_task`. For everything an
+  automation platform already connects to, prefer the push model: the
+  [ingestion webhook](ingestion-webhook.md) (`/api/ingest/webhook`) accepts
+  already-fetched content via `ingest_content_task`, so you don't write a plugin
+  per source. See [default-context-source.md](default-context-source.md).

@@ -6,8 +6,9 @@ public. Three credentials resolve to a principal:
 - owner JWT as ``Authorization: Bearer <jwt>`` (programmatic admin), or
 - API key as ``Authorization: Bearer sia_<key>`` / ``X-Sia-Key`` (agents).
 
-Unauthenticated requests to /api/context/build run as the rate-limited visitor
-principal (public-only, no fallback). /mcp enforces its own key auth in the mount.
+Unauthenticated requests to /api/context/build and /api/chat run as the
+rate-limited visitor principal (public-only, no fallback). /mcp enforces its own
+key auth in the mount.
 
 The rate limiter is in-memory per process — correct for the single-instance
 deployments this targets; swap for a shared store before scaling out.
@@ -34,11 +35,12 @@ PUBLIC_PREFIXES = (
     "/static/",
     "/mcp",  # enforces its own key auth
     "/api/ingest/slack",  # enforces its own webhook token
+    "/api/ingest/webhook",  # enforces its own webhook token
 )
 # Exact paths the anonymous visitor principal may reach. Matched exactly (not by
 # prefix) so sibling routes like /api/context/builds — the per-principal audit
 # endpoints — are NOT swept in and require real authentication.
-VISITOR_PATHS = ("/api/context/build",)
+VISITOR_PATHS = ("/api/context/build", "/api/chat")
 OWNER_PREFIXES = (
     "/admin",
     "/api/config",

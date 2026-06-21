@@ -77,6 +77,8 @@ Then connect a harness — Claude, ChatGPT, Cursor, anything MCP — in two minu
 ## Documentation
 
 - [docs/connectors.md](docs/connectors.md) — add Sia to Claude / ChatGPT / Cursor / REST
+- [docs/default-context-source.md](docs/default-context-source.md) — make Sia the *default* first stop, not just available
+- [docs/ingestion-webhook.md](docs/ingestion-webhook.md) — one webhook + Zapier/n8n/Make as the connector layer (no per-source code)
 - [docs/configuration.md](docs/configuration.md) — every env var and ai_config key
 - [docs/deployment.md](docs/deployment.md) — VPS deploy, backups, restore runbook
 - [docs/plugins.md](docs/plugins.md) — write an LLM/embeddings/ingestion plugin

@@ -16,3 +16,13 @@ Content:
 {content}
 
 Respond with valid JSON only."""
+
+THOUGHT_CLASSIFIER = """Classify this owner-authored thought into Sia's knowledge pillars.
+
+Return JSON:
+{{
+  "pillars": ["context_layers" | "product_mgmt" | "leadership"]
+}}
+
+Thought:
+{content}"""

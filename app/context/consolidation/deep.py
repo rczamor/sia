@@ -189,11 +189,12 @@ class DeepClock:
         artifacts_text = "\n\n".join(
             f"[artifact:{a.id}] {a.title}\n{a.content[:1200]}" for a in artifacts
         )
+        prompt_template = await self.llm.prompt("deep_skill", DEEP_SKILL)
         response = await self.llm.complete_structured(
             messages=[
                 {
                     "role": "user",
-                    "content": DEEP_SKILL.format(
+                    "content": prompt_template.format(
                         artifacts=artifacts_text, lineage_stats=stats_text or "(none)"
                     ),
                 }
@@ -229,6 +230,8 @@ def skill_document(spec: dict) -> StoreDocument:
         "id": f"skill-{slug}",
         "type": "skill",
         "status": "active",
+        "memento_contract_version": "1.0",
+        "progressive_disclosure": True,
         "maturity": "draft",
         "priority": 0.5,
         "visibility": "private",

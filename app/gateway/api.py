@@ -91,6 +91,27 @@ async def flag_build(request: Request, body: FlagRequest, db: AsyncSession = Dep
     return {"flagged": str(body.build_id), "useful": body.useful}
 
 
+class BypassRequest(BaseModel):
+    goal: str = Field(min_length=3, max_length=2000)
+    source: str = Field(min_length=1, max_length=500)
+    reason: str | None = Field(default=None, max_length=1000)
+
+
+@router.post("/api/context/bypass", status_code=201)
+async def record_bypass(request: Request, body: BypassRequest, db: AsyncSession = Depends(get_db)):
+    """Record that the caller used a source outside Sia for a goal (MCP parity
+    with sia_record_bypass). Feeds the bypass ledger surfaced in /api/context/health."""
+    from app.models.tables import ContextBypasses
+
+    principal = request.state.principal
+    row = ContextBypasses(
+        principal_id=principal.id, goal=body.goal, source=body.source, reason=body.reason
+    )
+    db.add(row)
+    await db.commit()
+    return {"recorded": str(row.id), "source": row.source}
+
+
 def _build_to_dict(row: ContextBuilds) -> dict:
     return {
         "id": str(row.id),

@@ -216,7 +216,37 @@ async def context_health(db: AsyncSession = Depends(get_db)):
         )
     ).mappings()
 
+    # Bypass ledger: how often consumers went to a source outside Sia. Together
+    # with build volume this gives a "Sia-first" discipline rate and a ranked
+    # list of the gaps worth closing.
+    bypasses = (
+        await db.execute(
+            text(
+                """
+                SELECT count(*) FILTER (
+                           WHERE created_at > now() - interval '7 days') AS last_7d,
+                       count(*) AS total
+                FROM context_bypasses
+                """
+            )
+        )
+    ).mappings().one()
+    top_bypassed_sources = (
+        await db.execute(
+            text(
+                """
+                SELECT source, count(*) AS n
+                FROM context_bypasses
+                WHERE created_at > now() - interval '30 days'
+                GROUP BY source ORDER BY n DESC LIMIT 10
+                """
+            )
+        )
+    ).mappings()
+
     builds_7d = builds["last_7d"] or 0
+    bypasses_7d = bypasses["last_7d"] or 0
+    decisions_7d = builds_7d + bypasses_7d
     return {
         "builds": {
             "total": builds["total"],
@@ -229,6 +259,14 @@ async def context_health(db: AsyncSession = Depends(get_db)):
             if builds_7d
             else None,
             "llm_cost_7d_usd": round(float(llm_cost_7d), 4),
+        },
+        "bypasses": {
+            "total": bypasses["total"],
+            "last_7d": bypasses_7d,
+            # Share of observed context-seeking that started in Sia rather than an
+            # outside source. 1.0 = Sia was the first stop every recorded time.
+            "sia_first_rate_7d": round(builds_7d / decisions_7d, 3) if decisions_7d else None,
+            "top_sources_30d": [dict(row) for row in top_bypassed_sources],
         },
         "consolidation": [dict(row) for row in consolidation],
         "store": [dict(row) for row in store_stats],

@@ -1,3 +1,4 @@
+import logging
 import time
 import uuid
 from typing import Any
@@ -7,6 +8,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.tables import ProcessLineage
 from app.providers.base import LLMOpsProvider, LLMProvider, LLMResponse
+
+logger = logging.getLogger(__name__)
 
 
 class LineageService:
@@ -72,6 +75,24 @@ class TrackedLLMProvider:
         self._provider = provider
         self._lineage = lineage
         self._llmops = llmops
+
+    async def prompt(
+        self, name: str, fallback: str, label: str = "production"
+    ) -> str:
+        """Load a managed prompt when LLM-ops supports prompt management.
+
+        Langfuse outages or missing prompt names should never break the context
+        engine; callers fall back to the local prompt constant and still record
+        lineage with the same prompt name.
+        """
+        if self._llmops is None:
+            return fallback
+        try:
+            managed = await self._llmops.get_prompt(name, label=label)
+        except Exception:
+            logger.exception("Managed prompt lookup failed for %s", name)
+            return fallback
+        return managed or fallback
 
     async def _trace(
         self, operation_type: str, prompt_name: str | None, messages, output_summary: str

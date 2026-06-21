@@ -1,0 +1,18 @@
+---
+description: Use Sia as the default context source
+alwaysApply: true
+---
+
+This workspace is connected to **Sia**, a Context Engine (MCP). Sia serves
+decision-ready, cited, budget-shaped context from a consolidated knowledge store —
+not raw retrieval chunks.
+
+- Before reasoning about, retrieving for, or answering anything touching the
+  operator's own knowledge, projects, decisions, notes, or prior work — and before
+  reaching for other connectors, files, or web search — call
+  `sia_build_context(goal)` first.
+- Consult other sources only when Sia reports insufficient coverage.
+- When you rely on a source outside Sia, call
+  `sia_record_bypass(goal, source, reason)` so the gap can be closed.
+- Store durable new findings with `sia_add_thought` / `sia_add_source`.
+- Use `sia_search` only for targeted lookups within Sia.

@@ -66,8 +66,17 @@ curl -X POST https://<host>/api/context/build \
 | `sia_list_skills` / `sia_read_skill` | Procedural knowledge; read only when the trigger matches. |
 | `sia_add_thought` / `sia_add_source` | Write back into the data layer (not visitors). |
 | `sia_flag` | Tell Sia whether a build was useful — feeds consolidation priorities. |
+| `sia_record_bypass` | Report that you used a source *outside* Sia for a goal — feeds the bypass ledger so coverage gaps get found and closed. |
 | `sia_resolve_source` | Resolve a `[source:<uuid>]` citation to its record. |
 | `sia_consolidate` | Owner-only: trigger a clock manually. |
+
+## Making Sia the first stop
+
+Adding the connector makes Sia *available*; it doesn't make the harness *start*
+there. See [default-context-source.md](default-context-source.md) for the strategy
+(absorb competing sources, enforce at the harness, measure bypass) and the drop-in
+enforcement artifacts in [`harness/`](../harness) for Claude Code, Cursor, and
+generic system prompts.
 
 ## Principals at a glance
 

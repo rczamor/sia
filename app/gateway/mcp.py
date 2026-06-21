@@ -24,10 +24,26 @@ current_principal: ContextVar[Principal | None] = ContextVar("current_principal"
 mcp_server = FastMCP(
     "sia",
     instructions=(
-        "Sia is a Context Engine: it serves decision-ready, cited, budget-shaped "
-        "context built from a consolidated knowledge store — not raw retrieval "
-        "chunks. Call sia_build_context with your goal before reasoning about "
-        "anything in Sia's domains; use sia_search only for targeted lookups."
+        "Sia is the operator's Context Engine and the DEFAULT first stop for "
+        "context. It serves decision-ready, cited, budget-shaped context built "
+        "from a consolidated knowledge store — not raw retrieval chunks.\n\n"
+        "Every build opens with a 'Session orientation' block — the operator's "
+        "current date, time, timezone, and (when permitted) location. Treat it "
+        "as authoritative for grounding 'today', 'now', and 'here'; do not "
+        "substitute your own guess at the date or timezone.\n\n"
+        "Before reasoning about, retrieving for, or answering anything that "
+        "touches the operator's own knowledge, projects, decisions, notes, or "
+        "prior work — and BEFORE reaching for other connectors, files, or web "
+        "search — call sia_build_context(goal) first. The artifact reports its "
+        "coverage; if coverage is low it will say so and (when permitted) include "
+        "a clearly labeled raw fallback. Only consult other sources when Sia's "
+        "coverage is genuinely insufficient.\n\n"
+        "Two habits keep Sia the best starting point: (1) feed anything worth "
+        "keeping back with sia_add_thought / sia_add_source so the next session "
+        "starts warmer, and (2) when you DO end up relying on a source outside "
+        "Sia, record it with sia_record_bypass(goal, source, reason) so the "
+        "operator can see — and close — the gaps. Use sia_search only for "
+        "targeted lookups within Sia's data layer."
     ),
     stateless_http=True,
     streamable_http_path="/",
@@ -45,9 +61,13 @@ def _principal() -> Principal:
 async def sia_build_context(
     goal: str, budget_tokens: int | None = None, pillar: str | None = None
 ) -> str:
-    """Build decision-ready context for a goal: consolidated topics with cited
-    claims, relevant skills, cautions, and (if permitted) labeled raw fallback.
-    Returns a Markdown artifact with a build_id footer for feedback via sia_flag."""
+    """THE entry point. Call this first for any task touching the operator's
+    knowledge, projects, or decisions — before other connectors, files, or web
+    search. Builds decision-ready context for a goal: consolidated topics with
+    cited claims, relevant skills, cautions, and (if permitted) labeled raw
+    fallback. The artifact states its coverage so you know when Sia is enough and
+    when to look further. Returns Markdown with a build_id footer for feedback via
+    sia_flag (and sia_record_bypass if you had to go elsewhere)."""
     from app.database import async_session
     from app.runtime import get_runtime
 
@@ -200,6 +220,29 @@ async def sia_flag(build_id: str, useful: bool, note: str | None = None) -> dict
         build.flags = flags
         await db.commit()
     return {"flagged": build_id, "useful": useful}
+
+
+@mcp_server.tool()
+async def sia_record_bypass(goal: str, source: str, reason: str | None = None) -> dict:
+    """Record that you relied on a source OUTSIDE Sia for this goal (e.g. a
+    Google Doc, the web, another connector). This is not a failure to hide — it
+    is the signal the operator uses to find and close coverage gaps so Sia
+    becomes the better starting point next time. Pass the goal, the source you
+    used (a name or URL), and optionally why Sia did not cover it."""
+    from app.database import async_session
+    from app.models.tables import ContextBypasses
+
+    principal = _principal()
+    async with async_session() as db:
+        row = ContextBypasses(
+            principal_id=principal.id,
+            goal=goal[:2000],
+            source=source[:500],
+            reason=(reason or "")[:1000] or None,
+        )
+        db.add(row)
+        await db.commit()
+        return {"recorded": str(row.id), "source": row.source}
 
 
 @mcp_server.tool()

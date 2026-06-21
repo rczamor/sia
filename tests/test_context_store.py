@@ -31,6 +31,7 @@ async def test_scaffold_creates_layout(store):
     assert "INDEX.md" in paths
     assert "profile/identity.md" in paths
     assert ".sia/store-spec.md" in paths
+    assert ".sia/skills-spec.md" in paths
     # scaffold is idempotent
     from app.context.store.layout import scaffold_store
 
@@ -138,3 +139,29 @@ async def test_delete_is_archive_only_by_convention(store):
     await store.commit({"knowledge/context_layers/old.md": "---\nstatus: stale\n---\n\n# Old\n"}, "prune")
     content = await store.read("knowledge/context_layers/old.md")
     assert "status: stale" in content
+
+
+def test_legacy_consolidation_backfill_document_shape():
+    import uuid
+    from datetime import datetime, timezone
+
+    from scripts.backfill_consolidations import document_for_legacy_consolidation
+
+    source_id = uuid.uuid4()
+    thought_id = uuid.uuid4()
+    document = document_for_legacy_consolidation(
+        {
+            "id": uuid.UUID("11111111-1111-1111-1111-111111111111"),
+            "insight_text": "Context must be synthesized before inference.",
+            "connected_source_ids": [source_id],
+            "connected_thought_ids": [thought_id],
+            "pillar": ["context_layers"],
+            "confidence": 0.7,
+            "created_at": datetime(2026, 6, 12, tzinfo=timezone.utc),
+        }
+    )
+
+    assert document.path.startswith("knowledge/context_layers/")
+    assert document.front["legacy_consolidation_id"] == "11111111-1111-1111-1111-111111111111"
+    assert str(source_id) in document.front["sources"]
+    assert f"[thought:{thought_id}]" in document.body
