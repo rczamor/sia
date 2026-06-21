@@ -32,9 +32,10 @@ store pinpoints the commit and consolidation run that introduced a claim;
 
 Operator-supplied URLs are fetched. `app/data/url_safety.py` allowlists http/https,
 refuses non-public addresses (loopback, RFC1918, link-local incl. 169.254.169.254),
-re-validates every redirect hop, and caps response size. **Residual**: DNS
-rebinding between resolve and connect is not pinned; mitigate at the network layer
-(egress filtering) if your deployment is sensitive.
+re-validates every redirect hop, pins the verified public IP at TCP connect time,
+preserves the original hostname for HTTP/TLS validation, and caps response size.
+Defense-in-depth: keep egress filtering enabled where your host or cloud supports
+it.
 
 ## 3. Credential theft / privilege escalation
 
@@ -49,8 +50,9 @@ rebinding between resolve and connect is not pinned; mitigate at the network lay
   forward `X-Forwarded-Proto` can't silently downgrade the session. The only
   way to weaken this is the explicit plain-http dev override. Cross-origin
   unsafe methods with a session cookie are refused (CSRF defense-in-depth).
-- Rate limits on login and anonymous builds (in-memory, per-process — use a
-  shared store before scaling out).
+- Rate limits on login and anonymous builds are stored in Postgres using hashed
+  client keys and per-key advisory locks, so horizontally scaled app instances
+  share the same counters.
 
 ## 4. Data exfiltration through served context
 

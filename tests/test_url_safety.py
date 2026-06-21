@@ -1,6 +1,10 @@
 import pytest
 
-from app.data.url_safety import UnsafeURLError, assert_safe_url
+from app.data.url_safety import (
+    PublicOnlyAsyncNetworkBackend,
+    UnsafeURLError,
+    assert_safe_url,
+)
 
 
 @pytest.mark.parametrize(
@@ -37,6 +41,54 @@ def test_rejects_private_and_metadata_addresses(url):
 def test_accepts_public_address():
     # IP literal avoids DNS dependence in tests; 93.184.216.34 is example.com.
     assert_safe_url("https://93.184.216.34/article")
+
+
+async def test_connection_backend_pins_verified_ip(monkeypatch):
+    """The actual TCP connect uses the validated IP, not the original hostname."""
+    import socket
+
+    class CapturingBackend:
+        def __init__(self):
+            self.connected_host = None
+
+        async def connect_tcp(self, host, port, **kwargs):
+            self.connected_host = host
+            return object()
+
+        async def connect_unix_socket(self, *args, **kwargs):
+            raise AssertionError("not used")
+
+        async def sleep(self, seconds):
+            pass
+
+    monkeypatch.setattr(
+        socket,
+        "getaddrinfo",
+        lambda host, port: [
+            (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("93.184.216.34", 443))
+        ],
+    )
+
+    capture = CapturingBackend()
+    backend = PublicOnlyAsyncNetworkBackend(capture)
+    await backend.connect_tcp("example.com", 443)
+    assert capture.connected_host == "93.184.216.34"
+
+
+async def test_connection_backend_rejects_rebound_private_ip(monkeypatch):
+    import socket
+
+    monkeypatch.setattr(
+        socket,
+        "getaddrinfo",
+        lambda host, port: [
+            (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("10.0.0.10", 80))
+        ],
+    )
+
+    backend = PublicOnlyAsyncNetworkBackend()
+    with pytest.raises(UnsafeURLError):
+        await backend.connect_tcp("example.com", 80)
 
 
 async def test_ingest_url_endpoint_refuses_internal_targets(client):

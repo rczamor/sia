@@ -3,7 +3,8 @@
 Design constraints:
 - The main working tree NEVER leaves the main branch; review branches are written
   through temporary worktrees, so web reads and worker writes cannot race a checkout.
-- All mutating operations serialize on an fcntl lock file.
+- All mutating operations queue on an event-loop lock before entering the worker
+  thread, then serialize cross-process on an fcntl lock file.
 - Untrusted-derived writes land on ``consolidation/<date>`` branches; only a human
   approval merges them (the memory-poisoning trust gate). Owner-tier writes commit
   straight to main.
@@ -18,6 +19,8 @@ import os
 # below — list args, no shell, fixed executable.
 import subprocess  # nosec B404
 import tempfile
+import threading
+import weakref
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Protocol, runtime_checkable
@@ -28,10 +31,32 @@ logger = logging.getLogger(__name__)
 
 GIT_AUTHOR = "Sia <sia@localhost>"
 REVIEW_BRANCH_PREFIX = "consolidation/"
+_ASYNC_MUTATION_LOCKS: weakref.WeakKeyDictionary[
+    asyncio.AbstractEventLoop, dict[Path, asyncio.Lock]
+] = weakref.WeakKeyDictionary()
+_ASYNC_MUTATION_LOCKS_GUARD = threading.Lock()
 
 
 class StoreError(RuntimeError):
     pass
+
+
+def _async_mutation_lock_for(root: Path) -> asyncio.Lock:
+    """One in-process async gate per event loop + store root.
+
+    Tests create fresh event loops, so a plain module-level asyncio.Lock would
+    eventually bind to the wrong loop. The WeakKeyDictionary keeps loop-local
+    locks and lets closed test loops disappear.
+    """
+    loop = asyncio.get_running_loop()
+    root_key = root.resolve()
+    with _ASYNC_MUTATION_LOCKS_GUARD:
+        locks = _ASYNC_MUTATION_LOCKS.setdefault(loop, {})
+        lock = locks.get(root_key)
+        if lock is None:
+            lock = asyncio.Lock()
+            locks[root_key] = lock
+        return lock
 
 
 def _safe_target(root: Path, rel_path: str) -> Path:
@@ -199,7 +224,8 @@ class GitContextStore:
     async def commit(
         self, files: dict[str, str | None], message: str, branch: str | None = None
     ) -> str:
-        return await asyncio.to_thread(self._commit_sync, files, message, branch)
+        async with _async_mutation_lock_for(self.root):
+            return await asyncio.to_thread(self._commit_sync, files, message, branch)
 
     async def head_sha(self) -> str:
         def _head():
@@ -241,14 +267,16 @@ class GitContextStore:
                 self._git("branch", "-D", branch)
                 return self._git("rev-parse", "HEAD").strip()
 
-        return await asyncio.to_thread(_merge)
+        async with _async_mutation_lock_for(self.root):
+            return await asyncio.to_thread(_merge)
 
     async def delete_branch(self, branch: str) -> None:
         def _delete():
             with self._lock():
                 self._git("branch", "-D", branch)
 
-        await asyncio.to_thread(_delete)
+        async with _async_mutation_lock_for(self.root):
+            await asyncio.to_thread(_delete)
 
     async def push_mirror(self) -> None:
         """Best-effort push to the configured remote mirror."""

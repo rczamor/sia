@@ -85,7 +85,7 @@ async def clean_tables(migrated_database):
                 "TRUNCATE source_content, my_thoughts, expertise_artifacts, "
                 "content_versions, process_lineage, "
                 "context_sections, consolidation_runs, entities, context_edges, "
-                "context_builds CASCADE"
+                "context_builds, rate_limit_hits CASCADE"
             )
         )
         # seeded owner/visitor principals stay; per-test agents go

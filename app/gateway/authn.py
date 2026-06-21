@@ -1,4 +1,4 @@
-"""Deny-by-default authentication middleware + a small in-memory rate limiter.
+"""Deny-by-default authentication middleware + shared sliding-window rate limits.
 
 Every route requires an authenticated principal unless its path is explicitly
 public. Three credentials resolve to a principal:
@@ -10,13 +10,15 @@ Unauthenticated requests to /api/context/build and /api/chat run as the
 rate-limited visitor principal (public-only, no fallback). /mcp enforces its own
 key auth in the mount.
 
-The rate limiter is in-memory per process — correct for the single-instance
-deployments this targets; swap for a shared store before scaling out.
+Rate limits are stored in Postgres with per-scope/key advisory transaction locks,
+so multiple app instances share the same login and anonymous-build counters.
 """
 
-import time
-from collections import defaultdict, deque
+import hashlib
+from datetime import datetime, timedelta, timezone
 
+from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse, RedirectResponse
@@ -62,25 +64,82 @@ OWNER_PREFIXES = (
 )
 
 
-class SlidingWindowLimiter:
-    def __init__(self, max_requests: int, window_seconds: float):
+class DatabaseSlidingWindowLimiter:
+    def __init__(self, scope: str, max_requests: int, window_seconds: float):
+        self.scope = scope
         self.max_requests = max_requests
         self.window_seconds = window_seconds
-        self._hits: dict[str, deque[float]] = defaultdict(deque)
 
-    def allow(self, key: str) -> bool:
-        now = time.monotonic()
-        hits = self._hits[key]
-        while hits and now - hits[0] > self.window_seconds:
-            hits.popleft()
-        if len(hits) >= self.max_requests:
+    async def allow(self, key: str) -> bool:
+        from app.database import async_session
+
+        now = datetime.now(timezone.utc)
+        cutoff = now - timedelta(seconds=self.window_seconds)
+        key_hash = _rate_limit_key_hash(self.scope, key)
+        try:
+            async with async_session() as db:
+                async with db.begin():
+                    # Serialize the check+insert for this limiter/key across app
+                    # instances. Without this, two concurrent workers can both see
+                    # count=N-1 and over-admit.
+                    await db.execute(
+                        text("SELECT pg_advisory_xact_lock(hashtext(:lock_key))"),
+                        {"lock_key": f"sia-rate-limit:{self.scope}:{key_hash}"},
+                    )
+                    await db.execute(
+                        text(
+                            """
+                            DELETE FROM rate_limit_hits
+                            WHERE scope = :scope AND hit_at < :cutoff
+                            """
+                        ),
+                        {"scope": self.scope, "cutoff": cutoff},
+                    )
+                    count = (
+                        await db.execute(
+                            text(
+                                """
+                                SELECT count(*) FROM rate_limit_hits
+                                WHERE scope = :scope
+                                  AND key_hash = :key_hash
+                                  AND hit_at >= :cutoff
+                                """
+                            ),
+                            {
+                                "scope": self.scope,
+                                "key_hash": key_hash,
+                                "cutoff": cutoff,
+                            },
+                        )
+                    ).scalar_one()
+                    if int(count) >= self.max_requests:
+                        return False
+                    await db.execute(
+                        text(
+                            """
+                            INSERT INTO rate_limit_hits (scope, key_hash, hit_at)
+                            VALUES (:scope, :key_hash, :hit_at)
+                            """
+                        ),
+                        {"scope": self.scope, "key_hash": key_hash, "hit_at": now},
+                    )
+                    return True
+        except SQLAlchemyError:
+            # Login/build endpoints should fail closed if the shared limiter cannot
+            # make an authoritative decision.
             return False
-        hits.append(now)
-        return True
 
 
-visitor_limiter = SlidingWindowLimiter(max_requests=30, window_seconds=60)
-login_limiter = SlidingWindowLimiter(max_requests=10, window_seconds=60)
+def _rate_limit_key_hash(scope: str, key: str) -> str:
+    return hashlib.sha256(f"{scope}:{key}".encode("utf-8")).hexdigest()
+
+
+visitor_limiter = DatabaseSlidingWindowLimiter(
+    scope="visitor", max_requests=30, window_seconds=60
+)
+login_limiter = DatabaseSlidingWindowLimiter(
+    scope="login", max_requests=10, window_seconds=60
+)
 
 
 # Default CSP for the admin UI. All frontend assets (Pico/HTMX/Cytoscape) are
@@ -138,14 +197,14 @@ class AuthMiddleware(BaseHTTPMiddleware):
 
         if path.startswith(PUBLIC_PREFIXES) or path == "/":
             if path.startswith(("/login", "/api/auth/login")) and request.method == "POST":
-                if not login_limiter.allow(_client_ip(request)):
+                if not await login_limiter.allow(_client_ip(request)):
                     return JSONResponse({"detail": "Too many attempts"}, status_code=429)
             return await call_next(request)
 
         principal = await _resolve_principal(request)
 
         if principal is None and path in VISITOR_PATHS:
-            if not visitor_limiter.allow(_client_ip(request)):
+            if not await visitor_limiter.allow(_client_ip(request)):
                 return JSONResponse({"detail": "Rate limit exceeded"}, status_code=429)
             from app.database import async_session
 

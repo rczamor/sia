@@ -165,3 +165,32 @@ def test_legacy_consolidation_backfill_document_shape():
     assert document.front["legacy_consolidation_id"] == "11111111-1111-1111-1111-111111111111"
     assert str(source_id) in document.front["sources"]
     assert f"[thought:{thought_id}]" in document.body
+
+
+async def test_commit_async_gate_serializes_before_thread_pool(store, monkeypatch):
+    import asyncio
+    import threading
+    import time
+
+    active = 0
+    max_active = 0
+    lock = threading.Lock()
+
+    def fake_commit_sync(files, message, branch):
+        nonlocal active, max_active
+        with lock:
+            active += 1
+            max_active = max(max_active, active)
+        time.sleep(0.05)
+        with lock:
+            active -= 1
+        return "a" * 40
+
+    monkeypatch.setattr(store, "_commit_sync", fake_commit_sync)
+
+    await asyncio.gather(
+        store.commit({"knowledge/context_layers/a.md": "# A\n"}, "a"),
+        store.commit({"knowledge/context_layers/b.md": "# B\n"}, "b"),
+    )
+
+    assert max_active == 1

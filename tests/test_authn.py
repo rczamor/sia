@@ -169,6 +169,35 @@ async def test_key_hashes_only_in_database(client, db_session):
     assert principal and principal.id == "agent-hashcheck"
 
 
+async def test_rate_limiter_uses_shared_hashed_ledger(db_session):
+    from sqlalchemy import text
+
+    from app.gateway.authn import DatabaseSlidingWindowLimiter, _rate_limit_key_hash
+
+    limiter = DatabaseSlidingWindowLimiter(
+        scope="test-login", max_requests=2, window_seconds=60
+    )
+    key = "203.0.113.10"
+
+    assert await limiter.allow(key)
+    assert await limiter.allow(key)
+    assert not await limiter.allow(key)
+
+    rows = (
+        await db_session.execute(
+            text(
+                """
+                SELECT scope, key_hash FROM rate_limit_hits
+                WHERE scope = 'test-login'
+                """
+            )
+        )
+    ).all()
+    assert len(rows) == 2
+    assert {row.key_hash for row in rows} == {_rate_limit_key_hash("test-login", key)}
+    assert key not in {row.key_hash for row in rows}
+
+
 async def test_secure_cookie_and_hsts_by_default(http_anon_client):
     """Production posture by default: even when uvicorn sees plain http (TLS proxy
     not forwarding the scheme), the session cookie is Secure and HSTS is sent."""
