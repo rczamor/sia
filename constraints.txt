@@ -151,7 +151,7 @@ numpy==2.4.6
     # via pgvector
 packageurl-python==0.17.6
     # via cyclonedx-python-lib
-packaging==24.2
+packaging==26.2
     # via
     #   langfuse
     #   pip-audit
