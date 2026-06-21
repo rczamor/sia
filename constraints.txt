@@ -145,7 +145,7 @@ mcp==1.27.2
     # via sia (pyproject.toml)
 mdurl==0.1.2
     # via markdown-it-py
-msgpack==1.2.0
+msgpack==1.2.1
     # via cachecontrol
 numpy==2.4.6
     # via pgvector
@@ -200,7 +200,7 @@ pydantic==2.13.4
     #   pydantic-settings
 pydantic-core==2.46.4
     # via pydantic
-pydantic-settings==2.14.1
+pydantic-settings==2.14.2
     # via
     #   sia (pyproject.toml)
     #   mcp
