@@ -235,8 +235,14 @@ class EntityExtractor:
             lines = []
             for row in batch:
                 lines.append(f"- {row.path} :: {await self._topic_text(row)}")
+            prompt_template = await self.llm.prompt("deep_entities", DEEP_ENTITIES)
             response = await self.llm.complete_structured(
-                messages=[{"role": "user", "content": DEEP_ENTITIES.format(topics="\n".join(lines))}],
+                messages=[
+                    {
+                        "role": "user",
+                        "content": prompt_template.format(topics="\n".join(lines)),
+                    }
+                ],
                 schema={"entities": [], "relations": []},
                 operation_type="consolidate",
                 prompt_name="deep_entities",

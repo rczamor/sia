@@ -191,7 +191,8 @@ class LightClock:
         candidate_text = (
             "\n".join(f"- {path} :: {gist}" for path, gist in candidates) or "(none yet)"
         )
-        prompt = LIGHT_MATCH.format(
+        prompt_template = await self.llm.prompt("light_match", LIGHT_MATCH)
+        prompt = prompt_template.format(
             candidates=candidate_text,
             source_id=source.id,
             source_type=source.source_type,

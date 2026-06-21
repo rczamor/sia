@@ -6,7 +6,7 @@ import trafilatura
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.data.quarantine import quarantine_reason
-from app.prompts.source_analyst import CLASSIFY_AND_SUMMARIZE
+from app.prompts.source_analyst import CLASSIFY_AND_SUMMARIZE, THOUGHT_CLASSIFIER
 from app.providers.base import EmbeddingProvider
 from app.data.knowledge_store import KnowledgeStore
 from app.data.lineage import TrackedLLMProvider
@@ -113,7 +113,8 @@ class IngestionService:
             return {"error": "No content to ingest", "url": url}
 
         # 3. LLM classify + summarize
-        prompt = CLASSIFY_AND_SUMMARIZE.format(
+        prompt_template = await self.llm.prompt("source_analyst", CLASSIFY_AND_SUMMARIZE)
+        prompt = prompt_template.format(
             title=title, content=content[:6000]
         )
         analysis = await self.llm.complete_structured(
@@ -196,8 +197,16 @@ class IngestionService:
     ) -> dict:
         # Auto-classify if no pillar provided
         if not pillar:
+            prompt_template = await self.llm.prompt(
+                "thought_classifier", THOUGHT_CLASSIFIER
+            )
             analysis = await self.llm.complete_structured(
-                messages=[{"role": "user", "content": f"Classify this thought into pillars: {content[:2000]}"}],
+                messages=[
+                    {
+                        "role": "user",
+                        "content": prompt_template.format(content=content[:2000]),
+                    }
+                ],
                 schema={"pillars": ["string"]},
                 model=self.classify_model,
                 temperature=self.classify_temperature,

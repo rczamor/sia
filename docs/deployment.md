@@ -99,6 +99,22 @@ Two things hold all state; both must be backed up:
    ```
 2. **Context store** — set `CONTEXT_STORE_REMOTE` to a private git remote; the
    store pushes after every review merge. Manual: `git -C /srv/sia/context push`.
+   Bootstrap or verify the separate repo with:
+   ```bash
+   python scripts/init_context_store.py --remote "$CONTEXT_STORE_REMOTE"
+   ```
+
+### Legacy consolidation backfill
+
+If upgrading a database that still contains the retired `consolidations` table,
+backfill it into topic files before applying the table-drop migration:
+
+```bash
+python scripts/backfill_consolidations.py
+```
+
+If the table is already gone or was empty, the script exits cleanly with zero
+files written.
 
 ### Restore runbook
 1. Restore the Postgres dump (or Neon PITR) into a fresh database.

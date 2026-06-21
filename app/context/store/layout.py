@@ -14,7 +14,7 @@ index. Git history is the audit trail.
 - `INDEX.md` — generated priority map (never edit by hand)
 - `profile/` — identity.md, goals.md, principals.md (owner-edited)
 - `knowledge/<pillar>/*.md` — topic files: declarative knowledge
-- `skills/<slug>/SKILL.md` — skill files: procedural knowledge
+- `skills/<slug>/SKILL.md` — Memento-style skill files: procedural knowledge
 - `theses/*.md` — long-form positions
 - `tensions/` — contradictions.md, open-questions.md
 - `.sia/` — spec, regression fixtures, lock
@@ -29,8 +29,10 @@ Body sections: `## Gist` (<=150 words), `## Key claims` (each cited with
 
 ## Skill front matter
 Adds: trigger_description, token_cost_estimate, maturity (draft|tested|proven),
-derived_from[].
-Body: procedure steps, examples, failure modes.
+memento_contract_version, progressive_disclosure, derived_from[].
+Body: procedure steps, examples, failure modes, and evidence links. Skill bodies
+must be compact enough for agents to read only when the trigger matches; the
+ContextBuilder serves stubs first and reveals full bodies only when budget allows.
 
 ## Trust gate
 Owner-tier writes commit to `main`. Anything derived from untrusted intake lands on
@@ -131,6 +133,32 @@ A fixture fails if any expected path is missing from the built artifact or cover
 drops below the floor. Hand-pick ~15 goals you actually ask about.
 """
 
+SKILLS_SPEC = """# Sia Skills Contract
+
+Sia skills follow the Memento-Skills pattern: small, triggerable procedure files
+that agents can discover cheaply and read fully only when relevant.
+
+## Front matter
+- `id`: stable `skill-<slug>` identifier
+- `type`: `skill`
+- `status`: `active`, `stale`, or `archived`
+- `memento_contract_version`: currently `1.0`
+- `progressive_disclosure`: `true`
+- `trigger_description`: when an agent should use the skill
+- `token_cost_estimate`: approximate full-body cost
+- `maturity`: `draft`, `tested`, or `proven`
+- `derived_from`: evidence refs such as `artifact:<uuid>` or topic paths
+
+## Body
+Use these headings:
+- `## Procedure`: numbered, concrete steps
+- `## Examples`: optional short examples
+- `## Failure modes`: ways the skill can misfire or should be skipped
+
+The deep clock may draft skills, but drafts land on review branches because skill
+files change downstream agent behavior.
+"""
+
 
 async def scaffold_store(store: GitContextStore) -> str:
     """Create the initial layout if the store is empty. Returns HEAD sha."""
@@ -152,5 +180,6 @@ async def scaffold_store(store: GitContextStore) -> str:
         "skills/.gitkeep": "",
         "theses/.gitkeep": "",
         ".sia/regression/README.md": REGRESSION_README,
+        ".sia/skills-spec.md": SKILLS_SPEC,
     }
     return await store.commit(files, "chore: scaffold context store")

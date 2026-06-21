@@ -48,6 +48,21 @@ secrets**.
 `provider` is a plugin id (`anthropic`, `openrouter`, or any third-party LLM plugin).
 Switching providers is a config change — no code, no restart of anything but the app.
 
+## Context store bootstrap
+
+Initialize the separate context repo before first production start:
+
+```bash
+python scripts/init_context_store.py --remote "$CONTEXT_STORE_REMOTE"
+```
+
+For older databases that still contain rows in the retired `consolidations` table,
+run the backfill before applying the drop migration:
+
+```bash
+python scripts/backfill_consolidations.py
+```
+
 ## Plugins table
 
 `plugins.enabled` + `plugins.config` (non-secret JSON) control which entry-point

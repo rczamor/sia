@@ -241,6 +241,8 @@ async def test_deep_clock_drafts_skill_on_review_branch(db_session, store, embed
     await review.approve(branches[0])
     content = await store.read("skills/context-build-review/SKILL.md")
     assert "maturity: draft" in content
+    assert "memento_contract_version: '1.0'" in content
+    assert "progressive_disclosure: true" in content
     assert "Check citations" in content
     # approved skill is indexed as kind=skill
     kind = (
