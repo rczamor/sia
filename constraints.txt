@@ -147,7 +147,7 @@ mdurl==0.1.2
     # via markdown-it-py
 msgpack==1.2.1
     # via cachecontrol
-numpy==2.4.6
+numpy==2.5.0
     # via pgvector
 packageurl-python==0.17.6
     # via cyclonedx-python-lib
