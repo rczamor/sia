@@ -272,7 +272,7 @@ sniffio==1.3.1
     # via anthropic
 sortedcontainers==2.4.0
     # via cyclonedx-python-lib
-sqlalchemy==2.0.50
+sqlalchemy==2.0.51
     # via
     #   sia (pyproject.toml)
     #   alembic
